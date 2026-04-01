@@ -1,231 +1,308 @@
-import Button from "@/src/components/ui/Button";
-import Screen from "@/src/components/ui/Screen";
-import { colors } from "@/src/theme/colors";
-import { Ionicons } from "@expo/vector-icons";
+import React, { useState } from "react";
 import { router } from "expo-router";
-import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import {
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from "react-native";
+import { Ionicons } from "@expo/vector-icons";
+import { useBookingStore } from "@/src/store/useBookingStore";
 
 export default function HomeScreen() {
+  const setSearchData = useBookingStore((state) => state.setSearchData);
+
+  const [origin, setOrigin] = useState("Tegucigalpa");
+  const [destination, setDestination] = useState("San Pedro Sula");
+  const [date, setDate] = useState("15 Oct 2026");
+  const [passengers, setPassengers] = useState("1");
+
+  const handleSwapLocations = () => {
+    const oldOrigin = origin;
+    setOrigin(destination);
+    setDestination(oldOrigin);
+  };
+
+  const handleSearch = () => {
+    const parsedPassengers = Number(passengers) || 1;
+
+    setSearchData({
+      origin: origin.trim(),
+      destination: destination.trim(),
+      date: date.trim(),
+      passengers: parsedPassengers,
+    });
+
+    router.push("/booking/results");
+  };
+
   return (
-    <Screen>
-      <View style={styles.container}>
+    <SafeAreaView style={styles.safeArea}>
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
         <View style={styles.header}>
           <View>
             <Text style={styles.greeting}>Hola, viajero 👋</Text>
             <Text style={styles.subtitle}>Encuentra tu próximo destino</Text>
           </View>
 
-          <TouchableOpacity style={styles.profileButton} activeOpacity={0.85}>
-            <Ionicons name="person-outline" size={22} color={colors.primary} />
+          <TouchableOpacity style={styles.profileButton}>
+            <Ionicons name="person-outline" size={22} color="#2F49E3" />
           </TouchableOpacity>
         </View>
 
-        <View style={styles.searchCard}>
+        <View style={styles.card}>
           <Text style={styles.cardTitle}>Buscar viaje</Text>
 
-          <TouchableOpacity style={styles.field} activeOpacity={0.85}>
-            <View style={styles.fieldLeft}>
-              <Ionicons name="location-outline" size={20} color={colors.primary} />
-              <View>
-                <Text style={styles.fieldLabel}>Origen</Text>
-                <Text style={styles.fieldValue}>Tegucigalpa</Text>
-              </View>
+          <View style={styles.field}>
+            <Ionicons name="location-outline" size={20} color="#5A67D8" />
+            <View style={styles.fieldTextContainer}>
+              <Text style={styles.label}>Origen</Text>
+              <TextInput
+                value={origin}
+                onChangeText={setOrigin}
+                placeholder="Ciudad de origen"
+                placeholderTextColor="#9CA3AF"
+                style={styles.input}
+              />
             </View>
+          </View>
+
+          <TouchableOpacity
+            style={styles.swapButton}
+            onPress={handleSwapLocations}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="swap-vertical" size={20} color="#5A67D8" />
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.swapButton} activeOpacity={0.85}>
-            <Ionicons name="swap-vertical" size={20} color={colors.primary} />
-          </TouchableOpacity>
-
-          <TouchableOpacity style={styles.field} activeOpacity={0.85}>
-            <View style={styles.fieldLeft}>
-              <Ionicons name="navigate-outline" size={20} color={colors.primary} />
-              <View>
-                <Text style={styles.fieldLabel}>Destino</Text>
-                <Text style={styles.fieldValue}>San Pedro Sula</Text>
-              </View>
+          <View style={styles.field}>
+            <Ionicons name="paper-plane-outline" size={20} color="#5A67D8" />
+            <View style={styles.fieldTextContainer}>
+              <Text style={styles.label}>Destino</Text>
+              <TextInput
+                value={destination}
+                onChangeText={setDestination}
+                placeholder="Ciudad de destino"
+                placeholderTextColor="#9CA3AF"
+                style={styles.input}
+              />
             </View>
-          </TouchableOpacity>
+          </View>
 
-          <TouchableOpacity style={styles.field} activeOpacity={0.85}>
-            <View style={styles.fieldLeft}>
-              <Ionicons name="calendar-outline" size={20} color={colors.primary} />
-              <View>
-                <Text style={styles.fieldLabel}>Fecha</Text>
-                <Text style={styles.fieldValue}>12 Abril 2026</Text>
-              </View>
+          <View style={styles.field}>
+            <Ionicons name="calendar-outline" size={20} color="#5A67D8" />
+            <View style={styles.fieldTextContainer}>
+              <Text style={styles.label}>Fecha</Text>
+              <TextInput
+                value={date}
+                onChangeText={setDate}
+                placeholder="Ej. 15 Oct 2026"
+                placeholderTextColor="#9CA3AF"
+                style={styles.input}
+              />
             </View>
-          </TouchableOpacity>
+          </View>
 
-          <TouchableOpacity style={styles.field} activeOpacity={0.85}>
-            <View style={styles.fieldLeft}>
-              <Ionicons name="people-outline" size={20} color={colors.primary} />
-              <View>
-                <Text style={styles.fieldLabel}>Pasajeros</Text>
-                <Text style={styles.fieldValue}>1 adulto</Text>
-              </View>
+          <View style={styles.field}>
+            <Ionicons name="people-outline" size={20} color="#5A67D8" />
+            <View style={styles.fieldTextContainer}>
+              <Text style={styles.label}>Pasajeros</Text>
+              <TextInput
+                value={passengers}
+                onChangeText={setPassengers}
+                placeholder="1"
+                placeholderTextColor="#9CA3AF"
+                keyboardType="numeric"
+                style={styles.input}
+              />
             </View>
-          </TouchableOpacity>
+          </View>
 
-          <Button
-            title="Buscar rutas"
-            onPress={() => router.push("/booking/results")}
-          />
+          <TouchableOpacity
+            style={styles.searchButton}
+            onPress={handleSearch}
+            activeOpacity={0.9}
+          >
+            <Text style={styles.searchButtonText}>Buscar rutas</Text>
+          </TouchableOpacity>
         </View>
 
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Rutas populares</Text>
-            <TouchableOpacity activeOpacity={0.8}>
-              <Text style={styles.seeAll}>Ver todo</Text>
+            <TouchableOpacity>
+              <Text style={styles.sectionLink}>Ver todo</Text>
             </TouchableOpacity>
           </View>
 
-          <View style={styles.routeCard}>
-            <View>
-              <Text style={styles.routeTitle}>Tegucigalpa → San Pedro Sula</Text>
-              <Text style={styles.routeMeta}>Desde L 320 • 4h 30min</Text>
-            </View>
-            <Ionicons name="arrow-forward" size={20} color={colors.primary} />
+          <View style={styles.popularCard}>
+            <Text style={styles.popularRoute}>Tegucigalpa → San Pedro Sula</Text>
+            <Text style={styles.popularMeta}>Viajes diarios desde L. 150</Text>
           </View>
 
-          <View style={styles.routeCard}>
-            <View>
-              <Text style={styles.routeTitle}>Tegucigalpa → La Ceiba</Text>
-              <Text style={styles.routeMeta}>Desde L 410 • 6h 10min</Text>
-            </View>
-            <Ionicons name="arrow-forward" size={20} color={colors.primary} />
+          <View style={styles.popularCard}>
+            <Text style={styles.popularRoute}>Tegucigalpa → La Ceiba</Text>
+            <Text style={styles.popularMeta}>Salidas matutinas y nocturnas</Text>
           </View>
         </View>
-      </View>
-    </Screen>
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  safeArea: {
     flex: 1,
-    paddingHorizontal: 20,
-    paddingTop: 18,
-    paddingBottom: 12,
+    backgroundColor: "#EAF1FF",
+  },
+  scrollContent: {
+    padding: 20,
+    paddingBottom: 32,
   },
   header: {
+    marginTop: 8,
+    marginBottom: 20,
     flexDirection: "row",
+    alignItems: "flex-start",
     justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 22,
   },
   greeting: {
-    fontSize: 26,
+    fontSize: 34,
     fontWeight: "800",
-    color: colors.text,
+    color: "#111827",
   },
   subtitle: {
     marginTop: 4,
-    fontSize: 15,
-    color: colors.muted,
+    fontSize: 16,
+    color: "#6B7280",
   },
   profileButton: {
-    width: 46,
-    height: 46,
-    borderRadius: 23,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     backgroundColor: "#FFFFFF",
     alignItems: "center",
     justifyContent: "center",
-    borderWidth: 1,
-    borderColor: colors.border,
+    shadowColor: "#000",
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 3,
   },
-  searchCard: {
+  card: {
     backgroundColor: "#FFFFFF",
     borderRadius: 28,
-    padding: 20,
+    padding: 18,
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: 10 },
     shadowOpacity: 0.08,
-    shadowRadius: 18,
-    elevation: 5,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 4,
   },
   cardTitle: {
-    fontSize: 21,
+    fontSize: 18,
     fontWeight: "800",
-    color: colors.text,
-    marginBottom: 16,
+    color: "#111827",
+    marginBottom: 14,
   },
   field: {
-    backgroundColor: "#F9FBFE",
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: colors.border,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    marginBottom: 12,
-  },
-  fieldLeft: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 12,
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    borderRadius: 18,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    backgroundColor: "#FAFBFF",
+    marginBottom: 14,
   },
-  fieldLabel: {
+  fieldTextContainer: {
+    flex: 1,
+    marginLeft: 12,
+  },
+  label: {
     fontSize: 13,
-    color: colors.muted,
+    color: "#9CA3AF",
     marginBottom: 2,
   },
-  fieldValue: {
-    fontSize: 16,
+  input: {
+    fontSize: 18,
     fontWeight: "700",
-    color: colors.text,
+    color: "#111827",
+    paddingVertical: 0,
   },
   swapButton: {
     alignSelf: "center",
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    backgroundColor: "#EEF4FF",
-    justifyContent: "center",
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: "#F3F6FF",
     alignItems: "center",
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: "#D8E5FF",
+    justifyContent: "center",
+    marginBottom: 14,
+  },
+  searchButton: {
+    marginTop: 4,
+    backgroundColor: "#2F49E3",
+    borderRadius: 18,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 16,
+    shadowColor: "#2F49E3",
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 4,
+  },
+  searchButtonText: {
+    color: "#FFFFFF",
+    fontSize: 20,
+    fontWeight: "800",
   },
   section: {
     marginTop: 26,
   },
   sectionHeader: {
     flexDirection: "row",
-    justifyContent: "space-between",
     alignItems: "center",
+    justifyContent: "space-between",
     marginBottom: 14,
   },
   sectionTitle: {
     fontSize: 18,
     fontWeight: "800",
-    color: colors.text,
+    color: "#111827",
   },
-  seeAll: {
-    fontSize: 14,
+  sectionLink: {
+    fontSize: 16,
     fontWeight: "700",
-    color: colors.primary,
+    color: "#2F49E3",
   },
-  routeCard: {
+  popularCard: {
     backgroundColor: "#FFFFFF",
     borderRadius: 20,
-    paddingHorizontal: 18,
-    paddingVertical: 16,
+    padding: 16,
     marginBottom: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
+    shadowColor: "#000",
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 2,
   },
-  routeTitle: {
-    fontSize: 15,
-    fontWeight: "700",
-    color: colors.text,
+  popularRoute: {
+    fontSize: 17,
+    fontWeight: "800",
+    color: "#111827",
+    marginBottom: 4,
   },
-  routeMeta: {
-    marginTop: 4,
-    fontSize: 13,
-    color: colors.muted,
+  popularMeta: {
+    fontSize: 14,
+    color: "#6B7280",
   },
 });

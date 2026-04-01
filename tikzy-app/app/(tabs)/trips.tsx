@@ -1,141 +1,206 @@
+import React, { useCallback, useMemo, useState } from "react";
+import {
+  ActivityIndicator,
+  FlatList,
+  Pressable,
+  RefreshControl,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
+import { useFocusEffect, useRouter } from "expo-router";
+
 import Screen from "@/src/components/ui/Screen";
-import Button from "@/src/components/ui/Button";
 import { colors } from "@/src/theme/colors";
-import { Trip, TripStatus, mockTrips } from "@/constants/mockTrips";
-import { getStoredTrips } from "@/constants/tripsStorage";
-import { router, useFocusEffect } from "expo-router";
-import React, { useCallback, useState } from "react";
-import { FlatList, StyleSheet, Text, View } from "react-native";
+import {
+  getTrips,
+  StoredTrip,
+  TripStatus,
+} from "@/constants/tripsStorage";
 
-function formatCurrency(amount: number) {
-  return new Intl.NumberFormat("es-HN", {
-    style: "currency",
-    currency: "HNL",
-  }).format(amount);
-}
-
-function getStatusLabel(status: TripStatus) {
-  switch (status) {
-    case "upcoming":
-      return "Upcoming";
-    case "completed":
-      return "Completed";
-    case "cancelled":
-      return "Cancelled";
-    default:
-      return status;
-  }
-}
-
-function getStatusStyle(status: TripStatus) {
-  switch (status) {
-    case "upcoming":
-      return styles.statusUpcoming;
-    case "completed":
-      return styles.statusCompleted;
-    case "cancelled":
-      return styles.statusCancelled;
-    default:
-      return styles.statusUpcoming;
-  }
-}
+const FILTERS: { label: string; value: TripStatus }[] = [
+  { label: "Upcoming", value: "upcoming" },
+  { label: "Completed", value: "completed" },
+  { label: "Cancelled", value: "cancelled" },
+];
 
 export default function TripsScreen() {
-  const [trips, setTrips] = useState<Trip[]>(mockTrips);
+  const router = useRouter();
+
+  const [trips, setTrips] = useState<StoredTrip[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [selectedFilter, setSelectedFilter] =
+    useState<TripStatus>("upcoming");
+
+  const loadTrips = useCallback(async () => {
+    try {
+      const storedTrips = await getTrips();
+      setTrips(Array.isArray(storedTrips) ? storedTrips : []);
+    } catch (error) {
+      console.error("Error loading trips:", error);
+      setTrips([]);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, []);
 
   useFocusEffect(
     useCallback(() => {
-      const loadTrips = async () => {
-        const storedTrips = await getStoredTrips();
-        if (storedTrips.length > 0) {
-          setTrips(storedTrips);
-        } else {
-          setTrips(mockTrips);
-        }
-      };
-
       loadTrips();
-    }, [])
+    }, [loadTrips])
   );
+
+  const filteredTrips = useMemo(() => {
+    return trips
+      .filter((trip) => trip.status === selectedFilter)
+      .sort(
+        (a, b) =>
+          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      );
+  }, [trips, selectedFilter]);
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await loadTrips();
+  };
+
+  function getStatusText(status: TripStatus) {
+    switch (status) {
+      case "upcoming":
+        return "Upcoming";
+      case "completed":
+        return "Completed";
+      case "cancelled":
+        return "Cancelled";
+      default:
+        return status;
+    }
+  }
+
+  function getStatusStyle(status: TripStatus) {
+    switch (status) {
+      case "upcoming":
+        return styles.statusUpcoming;
+      case "completed":
+        return styles.statusCompleted;
+      case "cancelled":
+        return styles.statusCancelled;
+      default:
+        return styles.statusUpcoming;
+    }
+  }
+
+  function renderTripCard({ item }: { item: StoredTrip }) {
+    return (
+      <Pressable
+        style={styles.card}
+        onPress={() => router.push(`/trip/${item.id}`)}
+      >
+        <View style={styles.cardTop}>
+          <View style={styles.routeBlock}>
+            <Text style={styles.routeText}>
+              {item.origin} → {item.destination}
+            </Text>
+            <Text style={styles.companyText}>{item.company}</Text>
+          </View>
+
+          <View style={[styles.statusBadge, getStatusStyle(item.status)]}>
+            <Text style={styles.statusText}>{getStatusText(item.status)}</Text>
+          </View>
+        </View>
+
+        <View style={styles.infoRow}>
+          <Text style={styles.label}>Date</Text>
+          <Text style={styles.value}>{item.date}</Text>
+        </View>
+
+        <View style={styles.infoRow}>
+          <Text style={styles.label}>Time</Text>
+          <Text style={styles.value}>
+            {item.departureTime} - {item.arrivalTime}
+          </Text>
+        </View>
+
+        <View style={styles.infoRow}>
+          <Text style={styles.label}>Seats</Text>
+          <Text style={styles.value}>{item.seats.join(", ")}</Text>
+        </View>
+
+        <View style={styles.infoRow}>
+          <Text style={styles.label}>Terminal</Text>
+          <Text style={styles.value}>{item.terminal}</Text>
+        </View>
+
+        <View style={styles.infoRow}>
+          <Text style={styles.label}>Bus</Text>
+          <Text style={styles.value}>{item.busNumber}</Text>
+        </View>
+
+        <View style={[styles.infoRow, styles.lastRow]}>
+          <Text style={styles.totalLabel}>Total</Text>
+          <Text style={styles.totalValue}>L {item.totalPaid.toFixed(2)}</Text>
+        </View>
+      </Pressable>
+    );
+  }
 
   return (
     <Screen>
       <View style={styles.container}>
         <Text style={styles.title}>My Trips</Text>
         <Text style={styles.subtitle}>
-          Check your upcoming, completed, and cancelled trips.
+          Check your bookings and their current status
         </Text>
 
-        <FlatList
-          data={trips}
-          keyExtractor={(item) => item.id}
-          contentContainerStyle={styles.listContent}
-          showsVerticalScrollIndicator={false}
-          renderItem={({ item }) => (
-            <View style={styles.card}>
-              <View style={styles.cardHeader}>
-                <View style={styles.headerLeft}>
-                  <Text style={styles.route}>
-                    {item.from} → {item.to}
-                  </Text>
-                  <Text style={styles.operator}>{item.operator}</Text>
-                </View>
+        <View style={styles.filtersContainer}>
+          {FILTERS.map((filter) => {
+            const isActive = selectedFilter === filter.value;
 
-                <View style={[styles.statusBadge, getStatusStyle(item.status)]}>
-                  <Text style={styles.statusText}>
-                    {getStatusLabel(item.status)}
-                  </Text>
-                </View>
-              </View>
+            return (
+              <Pressable
+                key={filter.value}
+                style={[styles.filterChip, isActive && styles.filterChipActive]}
+                onPress={() => setSelectedFilter(filter.value)}
+              >
+                <Text
+                  style={[
+                    styles.filterText,
+                    isActive && styles.filterTextActive,
+                  ]}
+                >
+                  {filter.label}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
 
-              <View style={styles.infoRow}>
-                <Text style={styles.label}>Date</Text>
-                <Text style={styles.value}>{item.date}</Text>
-              </View>
-
-              <View style={styles.infoRow}>
-                <Text style={styles.label}>Departure</Text>
-                <Text style={styles.value}>{item.departureTime}</Text>
-              </View>
-
-              <View style={styles.infoRow}>
-                <Text style={styles.label}>Arrival</Text>
-                <Text style={styles.value}>{item.arrivalTime}</Text>
-              </View>
-
-              <View style={styles.infoRow}>
-                <Text style={styles.label}>Seats</Text>
-                <Text style={styles.value}>{item.seats.join(", ")}</Text>
-              </View>
-
-              <View style={styles.infoRow}>
-                <Text style={styles.label}>Total</Text>
-                <Text style={styles.value}>{formatCurrency(item.total)}</Text>
-              </View>
-
-              <View style={styles.actions}>
-                <Button
-                  title="View Detail"
-                  onPress={() =>
-                    router.push({
-                      pathname: "/trip/[id]",
-                      params: { id: item.id },
-                    })
-                  }
-                />
-              </View>
-            </View>
-          )}
-          ListEmptyComponent={
-            <View style={styles.emptyState}>
-              <Text style={styles.emptyTitle}>No trips yet</Text>
-              <Text style={styles.emptyText}>
-                Your booked trips will appear here.
-              </Text>
-              <Button title="Book a trip" onPress={() => router.push("/home")} />
-            </View>
-          }
-        />
+        {loading ? (
+          <View style={styles.centered}>
+            <ActivityIndicator size="large" color={colors.primary} />
+            <Text style={styles.loadingText}>Loading trips...</Text>
+          </View>
+        ) : filteredTrips.length === 0 ? (
+          <View style={styles.emptyBox}>
+            <Text style={styles.emptyTitle}>No trips here yet</Text>
+            <Text style={styles.emptyText}>
+              There are no {selectedFilter} trips to display.
+            </Text>
+          </View>
+        ) : (
+          <FlatList
+            data={filteredTrips}
+            keyExtractor={(item) => item.id}
+            renderItem={renderTripCard}
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={styles.listContent}
+            refreshControl={
+              <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+            }
+          />
+        )}
       </View>
     </Screen>
   );
@@ -144,104 +209,162 @@ export default function TripsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    paddingHorizontal: 20,
-    paddingTop: 18,
+    padding: 20,
   },
   title: {
     fontSize: 28,
     fontWeight: "800",
-    color: colors.text ?? "#111827",
+    color: colors.text,
+    marginBottom: 6,
   },
   subtitle: {
-    marginTop: 8,
     fontSize: 14,
-    lineHeight: 20,
-    color: colors.muted ?? "#6B7280",
+    color: colors.muted,
     marginBottom: 18,
+  },
+  filtersContainer: {
+    flexDirection: "row",
+    marginBottom: 18,
+    gap: 10,
+    flexWrap: "wrap",
+  },
+  filterChip: {
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 999,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  filterChipActive: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+  },
+  filterText: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: colors.text,
+  },
+  filterTextActive: {
+    color: "#fff",
   },
   listContent: {
     paddingBottom: 24,
   },
   card: {
-    backgroundColor: colors.surface ?? "#FFFFFF",
+    backgroundColor: colors.surface,
     borderRadius: 18,
     padding: 16,
-    borderWidth: 1,
-    borderColor: colors.border ?? "#E5E7EB",
     marginBottom: 14,
+    borderWidth: 1,
+    borderColor: colors.border,
+    shadowColor: colors.shadow,
+    shadowOpacity: 1,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 3,
   },
-  cardHeader: {
+  cardTop: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "flex-start",
-    gap: 12,
     marginBottom: 14,
+    gap: 10,
   },
-  headerLeft: {
+  routeBlock: {
     flex: 1,
   },
-  route: {
-    fontSize: 18,
+  routeText: {
+    fontSize: 17,
     fontWeight: "800",
-    color: colors.text ?? "#111827",
+    color: colors.text,
     marginBottom: 4,
   },
-  operator: {
-    fontSize: 14,
-    color: colors.muted ?? "#6B7280",
+  companyText: {
+    fontSize: 13,
+    color: colors.muted,
+  },
+  statusBadge: {
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 999,
+  },
+  statusUpcoming: {
+    backgroundColor: "#DDEBFF",
+  },
+  statusCompleted: {
+    backgroundColor: "#DDF5E6",
+  },
+  statusCancelled: {
+    backgroundColor: "#FFE0E0",
+  },
+  statusText: {
+    fontSize: 12,
+    fontWeight: "800",
+    color: "#222",
   },
   infoRow: {
     flexDirection: "row",
     justifyContent: "space-between",
-    marginBottom: 10,
+    marginBottom: 8,
+    gap: 12,
   },
   label: {
-    fontSize: 14,
-    color: colors.muted ?? "#6B7280",
+    fontSize: 13,
+    color: colors.muted,
   },
   value: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: colors.text ?? "#111827",
+    flexShrink: 1,
+    fontSize: 13,
+    fontWeight: "600",
+    color: colors.text,
+    textAlign: "right",
   },
-  actions: {
-    marginTop: 12,
+  lastRow: {
+    marginTop: 6,
+    marginBottom: 0,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
   },
-  statusBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 999,
+  totalLabel: {
+    fontSize: 15,
+    fontWeight: "800",
+    color: colors.text,
   },
-  statusUpcoming: {
-    backgroundColor: "#DCFCE7",
+  totalValue: {
+    fontSize: 16,
+    fontWeight: "800",
+    color: colors.primary,
   },
-  statusCompleted: {
-    backgroundColor: "#DBEAFE",
-  },
-  statusCancelled: {
-    backgroundColor: "#FEE2E2",
-  },
-  statusText: {
-    fontSize: 12,
-    fontWeight: "700",
-    color: "#111827",
-  },
-  emptyState: {
+  centered: {
+    flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    paddingVertical: 60,
-    paddingHorizontal: 20,
+  },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 14,
+    color: colors.muted,
+  },
+  emptyBox: {
+    marginTop: 40,
+    padding: 24,
+    borderRadius: 18,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    alignItems: "center",
   },
   emptyTitle: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: "800",
-    color: colors.text ?? "#111827",
+    color: colors.text,
     marginBottom: 8,
   },
   emptyText: {
     fontSize: 14,
-    color: colors.muted ?? "#6B7280",
+    color: colors.muted,
     textAlign: "center",
-    marginBottom: 16,
   },
 });

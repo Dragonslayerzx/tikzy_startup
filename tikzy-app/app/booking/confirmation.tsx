@@ -1,453 +1,434 @@
-import { addTrip } from "@/constants/tripsStorage";
+import React, { useEffect } from "react";
+import { router } from "expo-router";
 import {
-  clearBookingDraft,
-  getBookingDraft,
-  type BookingDraft,
-} from "@/constants/bookingDraftStorage";
-import { colors } from "@/src/theme/colors";
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { router, useFocusEffect } from "expo-router";
-import React, { useCallback, useMemo, useState } from "react";
-import { ActivityIndicator, SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
-import QRCode from "react-native-qrcode-svg";
-
-function generateBookingCode() {
-  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-  const part = () =>
-    Array.from({ length: 4 }, () => chars[Math.floor(Math.random() * chars.length)]).join("");
-
-  return `TKZ-${part()}-${part().slice(0, 2)}`;
-}
-
-function formatCurrency(amount: number) {
-  return new Intl.NumberFormat("es-HN", {
-    style: "currency",
-    currency: "HNL",
-  }).format(amount);
-}
+import { useBookingStore } from "@/src/store/useBookingStore";
 
 export default function ConfirmationScreen() {
-  const [draft, setDraft] = useState<BookingDraft | null>(null);
-  const [loading, setLoading] = useState(true);
+  const confirmedTrip = useBookingStore((state) => state.confirmedTrip);
+  const resetBooking = useBookingStore((state) => state.resetBooking);
 
-  useFocusEffect(
-    useCallback(() => {
-      const loadDraft = async () => {
-        setLoading(true);
-        const storedDraft = await getBookingDraft();
-        setDraft(storedDraft);
-        setLoading(false);
-      };
-
-      loadDraft();
-    }, [])
-  );
-
-  const bookingCode = useMemo(() => generateBookingCode(), []);
-
-  const handleViewTrips = async () => {
-    if (!draft) {
-      router.replace("/trips");
-      return;
+  useEffect(() => {
+    if (!confirmedTrip) {
+      router.replace("/(tabs)/home");
     }
+  }, [confirmedTrip]);
 
-    const newTrip = {
-      id: Date.now().toString(),
-      from: draft.from,
-      to: draft.to,
-      operator: draft.operator,
-      date: draft.date,
-      departureTime: draft.departureTime,
-      arrivalTime: draft.arrivalTime,
-      seats: draft.seats,
-      total: draft.total,
-      status: "upcoming" as const,
-      terminal: draft.terminal,
-      boardingPoint: draft.boardingPoint,
-    };
+  if (!confirmedTrip) {
+    return null;
+  }
 
-    await addTrip(newTrip);
-    await clearBookingDraft();
-    router.replace("/trips");
+  const handleGoHome = () => {
+    resetBooking();
+    router.replace("/(tabs)/home");
   };
 
-  if (loading) {
-    return (
-      <View style={[styles.container, styles.centered]}>
-        <ActivityIndicator size="large" color={colors.primary} />
-        <Text style={styles.loadingText}>Loading confirmation...</Text>
-      </View>
-    );
-  }
+  const handleViewTrips = () => {
+    router.replace("/(tabs)/trips");
+  };
 
-  if (!draft) {
-    return (
-      <View style={[styles.container, styles.centered]}>
-        <View style={styles.noticeCard}>
-          <Ionicons
-            name="alert-circle-outline"
-            size={20}
-            color={colors.primary}
-          />
-          <Text style={styles.noticeText}>
-            No booking data was found. Please complete your booking first.
-          </Text>
-        </View>
-
-        <TouchableOpacity
-          style={styles.primaryButton}
-          activeOpacity={0.9}
-          onPress={() => router.replace("/home")}
-        >
-          <Text style={styles.primaryButtonText}>Go Home</Text>
-        </TouchableOpacity>
-      </View>
-    );
-  }
-
-  const qrValue = JSON.stringify({
-    from: draft.from,
-    to: draft.to,
-    operator: draft.operator,
-    date: draft.date,
-    departureTime: draft.departureTime,
-    seats: draft.seats,
-    total: draft.total,
-    bookingCode,
-  });
+  const handleViewTripDetail = () => {
+    router.push(`/trip/${confirmedTrip.tripId}`);
+  };
 
   return (
     <SafeAreaView style={styles.safeArea}>
-    <ScrollView
-      contentContainerStyle={styles.scrollContent}
-      showsVerticalScrollIndicator={false}
-    >
       <View style={styles.container}>
-        <View style={styles.topSection}>
-          <View style={styles.successCircle}>
-            <Ionicons name="checkmark" size={42} color="#FFFFFF" />
-          </View>
-
-          <Text style={styles.title}>¡Compra Exitosa!</Text>
-          <Text style={styles.subtitle}>
-            Tu ticket ha sido confirmado y ya está listo para abordar.
-          </Text>
-        </View>
-
-        <View style={styles.ticketCard}>
-          <View style={styles.ticketHeader}>
-            <Text style={styles.ticketLabel}>TICKET ELECTRÓNICO</Text>
-            <View style={styles.statusBadge}>
-              <Text style={styles.statusText}>Confirmado</Text>
-            </View>
-          </View>
-
-          <Text style={styles.companyName}>{draft.operator}</Text>
-          <Text style={styles.routeText}>
-            {draft.from} → {draft.to}
-          </Text>
-
-          <View style={styles.infoGrid}>
-            <View style={styles.infoItem}>
-              <Text style={styles.infoLabel}>Fecha</Text>
-              <Text style={styles.infoValue}>{draft.date}</Text>
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={styles.successSection}>
+            <View style={styles.successIcon}>
+              <Ionicons name="checkmark" size={34} color="#FFFFFF" />
             </View>
 
-            <View style={styles.infoItem}>
-              <Text style={styles.infoLabel}>Salida</Text>
-              <Text style={styles.infoValue}>{draft.departureTime}</Text>
-            </View>
-
-            <View style={styles.infoItem}>
-              <Text style={styles.infoLabel}>Llegada</Text>
-              <Text style={styles.infoValue}>{draft.arrivalTime}</Text>
-            </View>
-
-            <View style={styles.infoItem}>
-              <Text style={styles.infoLabel}>Asientos</Text>
-              <Text style={styles.infoValue}>{draft.seats.join(", ")}</Text>
-            </View>
-
-            <View style={styles.infoItem}>
-              <Text style={styles.infoLabel}>Terminal</Text>
-              <Text style={styles.infoValue}>{draft.terminal}</Text>
-            </View>
-
-            <View style={styles.infoItem}>
-              <Text style={styles.infoLabel}>Abordaje</Text>
-              <Text style={styles.infoValue}>{draft.boardingPoint}</Text>
-            </View>
-          </View>
-
-          <View style={styles.divider} />
-
-          <View style={styles.qrSection}>
-            <View style={styles.qrBox}>
-              <QRCode value={qrValue} size={150} />
-            </View>
-            <Text style={styles.qrCaption}>
-              Código QR para validación al abordar
+            <Text style={styles.successTitle}>¡Pago realizado con éxito!</Text>
+            <Text style={styles.successSubtitle}>
+              Tu boleto ya fue reservado y está listo para tu viaje.
             </Text>
           </View>
 
-          <View style={styles.divider} />
+          <View style={styles.ticketCard}>
+            <View style={styles.ticketHeader}>
+              <View>
+                <Text style={styles.ticketLabel}>Compañía</Text>
+                <Text style={styles.ticketCompany}>{confirmedTrip.company}</Text>
+              </View>
 
-          <View style={styles.bottomInfo}>
-            <View>
-              <Text style={styles.smallLabel}>Código de reserva</Text>
-              <Text style={styles.bookingCode}>{bookingCode}</Text>
+              <View style={styles.statusBadge}>
+                <Text style={styles.statusBadgeText}>Confirmado</Text>
+              </View>
             </View>
 
-            <View style={styles.priceBlock}>
-              <Text style={styles.smallLabel}>Total pagado</Text>
-              <Text style={styles.totalPaid}>{formatCurrency(draft.total)}</Text>
+            <View style={styles.routeRow}>
+              <View style={styles.routeBlock}>
+                <Text style={styles.routeCity}>{confirmedTrip.origin}</Text>
+                <Text style={styles.routeTime}>{confirmedTrip.departureTime}</Text>
+              </View>
+
+              <View style={styles.routeCenter}>
+                <Text style={styles.routeArrow}>→</Text>
+                <Text style={styles.routeDate}>{confirmedTrip.date}</Text>
+              </View>
+
+              <View style={styles.routeBlock}>
+                <Text style={styles.routeCity}>{confirmedTrip.destination}</Text>
+                <Text style={styles.routeTime}>{confirmedTrip.arrivalTime}</Text>
+              </View>
+            </View>
+
+            <View style={styles.dashedDivider} />
+
+            <View style={styles.infoGrid}>
+              <View style={styles.infoItem}>
+                <Text style={styles.infoLabel}>Asientos</Text>
+                <Text style={styles.infoValue}>
+                  {confirmedTrip.seats.join(", ")}
+                </Text>
+              </View>
+
+              <View style={styles.infoItem}>
+                <Text style={styles.infoLabel}>Bus</Text>
+                <Text style={styles.infoValue}>{confirmedTrip.busNumber}</Text>
+              </View>
+
+              <View style={styles.infoItem}>
+                <Text style={styles.infoLabel}>Terminal</Text>
+                <Text style={styles.infoValue}>{confirmedTrip.terminal}</Text>
+              </View>
+
+              <View style={styles.infoItem}>
+                <Text style={styles.infoLabel}>Total pagado</Text>
+                <Text style={styles.infoValue}>L. {confirmedTrip.totalPaid}</Text>
+              </View>
+            </View>
+
+            <View style={styles.dashedDivider} />
+
+            <View style={styles.qrSection}>
+              <View style={styles.qrBox}>
+                <Ionicons name="qr-code-outline" size={110} color="#111827" />
+              </View>
+
+              <Text style={styles.qrCodeText}>{confirmedTrip.qrValue}</Text>
+              <Text style={styles.qrHint}>
+                Presenta este código al momento de abordar.
+              </Text>
             </View>
           </View>
+
+          <View style={styles.referenceCard}>
+            <View style={styles.referenceRow}>
+              <Ionicons name="receipt-outline" size={18} color="#2F49E3" />
+              <View style={styles.referenceTextWrap}>
+                <Text style={styles.referenceLabel}>ID de viaje</Text>
+                <Text style={styles.referenceValue}>{confirmedTrip.tripId}</Text>
+              </View>
+            </View>
+          </View>
+        </ScrollView>
+
+        <View style={styles.bottomBar}>
+          <TouchableOpacity
+            style={styles.secondaryButton}
+            onPress={handleViewTrips}
+            activeOpacity={0.9}
+          >
+            <Text style={styles.secondaryButtonText}>Mis viajes</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.outlineButton}
+            onPress={handleViewTripDetail}
+            activeOpacity={0.9}
+          >
+            <Text style={styles.outlineButtonText}>Ver detalle</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.primaryButton}
+            onPress={handleGoHome}
+            activeOpacity={0.9}
+          >
+            <Text style={styles.primaryButtonText}>Inicio</Text>
+          </TouchableOpacity>
         </View>
-
-        <View style={styles.noticeCard}>
-          <Ionicons
-            name="information-circle-outline"
-            size={18}
-            color={colors.primary}
-          />
-          <Text style={styles.noticeText}>
-            Preséntate 20 minutos antes de la salida. Lleva tu documento de
-            identidad y muestra este ticket en el abordaje.
-          </Text>
-        </View>
-
-        <TouchableOpacity
-          style={styles.primaryButton}
-          activeOpacity={0.9}
-          onPress={handleViewTrips}
-        >
-          <Text style={styles.primaryButtonText}>Ver Mis Viajes</Text>
-          <Ionicons name="arrow-forward" size={20} color="#FFFFFF" />
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.secondaryButton}
-          activeOpacity={0.85}
-          onPress={() => router.replace("/home")}
-        >
-          <Ionicons name="home-outline" size={18} color={colors.primary} />
-          <Text style={styles.secondaryButtonText}>Volver al inicio</Text>
-        </TouchableOpacity>
       </View>
-    </ScrollView>
-  </SafeAreaView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: colors.background,
-  },
-  scrollContent: {
-    paddingBottom: 32,
+    backgroundColor: "#EAF1FF",
   },
   container: {
-    flexGrow: 1,
-    backgroundColor: colors.background,
+    flex: 1,
+  },
+  scrollContent: {
     paddingHorizontal: 16,
-    paddingTop: 24,
-    paddingBottom: 18,
+    paddingTop: 18,
+    paddingBottom: 120,
   },
-  centered: {
-    justifyContent: "center",
-  },
-  loadingText: {
-    marginTop: 12,
-    textAlign: "center",
-    color: colors.muted,
-    fontSize: 14,
-    fontWeight: "600",
-  },
-  topSection: {
+  successSection: {
     alignItems: "center",
-    marginBottom: 18,
+    marginBottom: 20,
   },
-  successCircle: {
-    width: 88,
-    height: 88,
-    borderRadius: 44,
-    backgroundColor: "#22C55E",
-    justifyContent: "center",
+  successIcon: {
+    width: 78,
+    height: 78,
+    borderRadius: 39,
+    backgroundColor: "#16A34A",
     alignItems: "center",
+    justifyContent: "center",
     marginBottom: 14,
+    shadowColor: "#16A34A",
+    shadowOpacity: 0.25,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 5 },
+    elevation: 6,
   },
-  title: {
-    fontSize: 30,
+  successTitle: {
+    fontSize: 24,
     fontWeight: "800",
-    color: colors.text,
+    color: "#101828",
     textAlign: "center",
+    marginBottom: 6,
   },
-  subtitle: {
-    marginTop: 8,
-    fontSize: 15,
-    color: colors.muted,
+  successSubtitle: {
+    fontSize: 14,
+    color: "#667085",
     textAlign: "center",
-    lineHeight: 22,
+    lineHeight: 20,
     paddingHorizontal: 18,
   },
   ticketCard: {
     backgroundColor: "#FFFFFF",
-    borderRadius: 26,
+    borderRadius: 28,
     padding: 18,
-    borderWidth: 1,
-    borderColor: colors.border,
+    marginBottom: 14,
+    shadowColor: "#000",
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 5 },
+    elevation: 4,
   },
   ticketHeader: {
     flexDirection: "row",
+    alignItems: "flex-start",
     justifyContent: "space-between",
-    alignItems: "center",
+    marginBottom: 18,
   },
   ticketLabel: {
     fontSize: 12,
+    color: "#98A2B3",
+    fontWeight: "700",
+    marginBottom: 4,
+  },
+  ticketCompany: {
+    fontSize: 18,
     fontWeight: "800",
-    color: colors.muted,
+    color: "#101828",
+    maxWidth: 220,
   },
   statusBadge: {
-    backgroundColor: "#DCFCE7",
+    backgroundColor: "#ECFDF3",
     borderRadius: 999,
     paddingHorizontal: 12,
-    paddingVertical: 6,
+    paddingVertical: 7,
   },
-  statusText: {
-    color: "#15803D",
+  statusBadgeText: {
     fontSize: 12,
     fontWeight: "800",
+    color: "#027A48",
   },
-  companyName: {
-    marginTop: 16,
-    fontSize: 24,
+  routeRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
+    marginBottom: 18,
+  },
+  routeBlock: {
+    flex: 1,
+  },
+  routeCity: {
+    fontSize: 18,
     fontWeight: "800",
-    color: colors.text,
+    color: "#101828",
+    marginBottom: 4,
   },
-  routeText: {
-    marginTop: 4,
-    fontSize: 16,
-    color: colors.primary,
+  routeTime: {
+    fontSize: 14,
+    color: "#475467",
     fontWeight: "700",
   },
+  routeCenter: {
+    alignItems: "center",
+    justifyContent: "center",
+    minWidth: 90,
+  },
+  routeArrow: {
+    fontSize: 28,
+    fontWeight: "800",
+    color: "#2F49E3",
+    marginBottom: 4,
+  },
+  routeDate: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#667085",
+    textAlign: "center",
+  },
+  dashedDivider: {
+    borderStyle: "dashed",
+    borderWidth: 1,
+    borderColor: "#E4E7EC",
+    marginBottom: 18,
+  },
   infoGrid: {
-    marginTop: 18,
     flexDirection: "row",
     flexWrap: "wrap",
     rowGap: 16,
   },
   infoItem: {
     width: "50%",
+    paddingRight: 8,
   },
   infoLabel: {
     fontSize: 12,
-    color: colors.muted,
+    color: "#98A2B3",
     fontWeight: "700",
     marginBottom: 4,
   },
   infoValue: {
-    fontSize: 18,
-    color: colors.text,
+    fontSize: 14,
+    color: "#101828",
     fontWeight: "800",
-  },
-  divider: {
-    height: 1,
-    backgroundColor: colors.border,
-    marginVertical: 18,
-    borderStyle: "dashed",
+    lineHeight: 20,
   },
   qrSection: {
     alignItems: "center",
   },
   qrBox: {
-    backgroundColor: "#FFFFFF",
-    padding: 14,
-    borderRadius: 16,
+    width: 150,
+    height: 150,
+    borderRadius: 18,
+    backgroundColor: "#F8FAFC",
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: "#E5E7EB",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 12,
   },
-  qrCaption: {
-    marginTop: 10,
+  qrCodeText: {
     fontSize: 13,
-    color: colors.muted,
+    fontWeight: "800",
+    color: "#344054",
+    marginBottom: 6,
+  },
+  qrHint: {
+    fontSize: 13,
+    color: "#667085",
     textAlign: "center",
   },
-  bottomInfo: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "flex-end",
+  referenceCard: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 20,
+    padding: 16,
+    marginBottom: 14,
+    shadowColor: "#000",
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 2,
   },
-  smallLabel: {
+  referenceRow: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  referenceTextWrap: {
+    marginLeft: 10,
+    flex: 1,
+  },
+  referenceLabel: {
     fontSize: 12,
-    color: colors.muted,
+    color: "#98A2B3",
     fontWeight: "700",
     marginBottom: 4,
   },
-  bookingCode: {
-    fontSize: 18,
-    color: colors.text,
+  referenceValue: {
+    fontSize: 14,
+    color: "#101828",
     fontWeight: "800",
   },
-  priceBlock: {
-    alignItems: "flex-end",
-  },
-  totalPaid: {
-    fontSize: 24,
-    color: colors.primary,
-    fontWeight: "800",
-  },
-  noticeCard: {
-    marginTop: 16,
-    backgroundColor: "#EAF3FF",
-    borderRadius: 18,
-    paddingVertical: 14,
-    paddingHorizontal: 14,
+  bottomBar: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "#FFFFFF",
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingHorizontal: 12,
+    paddingTop: 14,
+    paddingBottom: 20,
     flexDirection: "row",
     gap: 8,
-    alignItems: "flex-start",
-    borderWidth: 1,
-    borderColor: "#D7E7FF",
-  },
-  noticeText: {
-    flex: 1,
-    fontSize: 13,
-    color: colors.text,
-    lineHeight: 18,
-  },
-  primaryButton: {
-    marginTop: 16,
-    backgroundColor: colors.primary,
-    borderRadius: 18,
-    paddingVertical: 17,
-    paddingHorizontal: 18,
-    flexDirection: "row",
-    justifyContent: "center",
-    alignItems: "center",
-    gap: 8,
-  },
-  primaryButtonText: {
-    color: "#FFFFFF",
-    fontSize: 18,
-    fontWeight: "800",
+    shadowColor: "#000",
+    shadowOpacity: 0.08,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: -4 },
+    elevation: 10,
   },
   secondaryButton: {
-    marginTop: 12,
-    backgroundColor: "#FFFFFF",
-    borderRadius: 18,
-    paddingVertical: 16,
-    paddingHorizontal: 18,
-    borderWidth: 1,
-    borderColor: colors.border,
-    flexDirection: "row",
-    justifyContent: "center",
+    flex: 1,
+    borderRadius: 16,
+    paddingVertical: 14,
     alignItems: "center",
-    gap: 8,
+    justifyContent: "center",
+    backgroundColor: "#EEF4FF",
   },
   secondaryButtonText: {
-    color: colors.primary,
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: "800",
+    color: "#2F49E3",
+  },
+  outlineButton: {
+    flex: 1,
+    borderRadius: 16,
+    paddingVertical: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1.5,
+    borderColor: "#2F49E3",
+  },
+  outlineButtonText: {
+    fontSize: 14,
+    fontWeight: "800",
+    color: "#2F49E3",
+  },
+  primaryButton: {
+    flex: 1,
+    borderRadius: 16,
+    paddingVertical: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#2F49E3",
+  },
+  primaryButtonText: {
+    fontSize: 14,
+    fontWeight: "800",
+    color: "#FFFFFF",
   },
 });

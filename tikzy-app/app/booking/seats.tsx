@@ -1,505 +1,549 @@
-import { colors } from "@/src/theme/colors";
-import { Ionicons } from "@expo/vector-icons";
+import React, { useEffect } from "react";
 import { router } from "expo-router";
-import React, { useState } from "react";
-import { Alert, SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import {
+  Alert,
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
+import { Ionicons } from "@expo/vector-icons";
+import { useBookingStore } from "@/src/store/useBookingStore";
+
+const occupiedSeats = new Set([
+  "A2",
+  "A4",
+  "B1",
+  "B3",
+  "C2",
+  "C4",
+  "D1",
+]);
 
 const seatRows = [
-  ["1A", "1B", null, "1C", "1D"],
-  ["2A", "2B", null, "2C", "2D"],
-  ["3A", "3B", null, "3C", "3D"],
-  ["4A", "4B", null, "4C", "4D"],
-  ["5A", "5B", null, "5C", "5D"],
-  ["6A", "6B", null, "6C", "6D"],
+  ["A1", "A2", "A3", "A4"],
+  ["B1", "B2", "B3", "B4"],
+  ["C1", "C2", "C3", "C4"],
+  ["D1", "D2", "D3", "D4"],
+  ["E1", "E2", "E3", "E4"],
 ];
 
-const occupiedSeats = new Set(["1A", "1B", "2D", "3C", "3D", "5A"]);
-
 export default function SeatsScreen() {
-  const [selectedSeat, setSelectedSeat] = useState<string>("2C");
+  const selectedRoute = useBookingStore((state) => state.selectedRoute);
+  const selectedSeats = useBookingStore((state) => state.selectedSeats);
+  const passengers = useBookingStore((state) => state.passengers);
+  const toggleSeat = useBookingStore((state) => state.toggleSeat);
 
-  const tripData = {
-    from: "Tegucigalpa",
-    to: "San Pedro Sula",
-    operator: "Transportes Cristina",
-    date: "15 Oct 2026",
-    departureTime: "1:00 PM",
-    arrivalTime: "5:00 PM",
-    terminal: "Terminal Centro",
-    boardingPoint: "Bus #42",
-    total: 235,
-  };
+  useEffect(() => {
+    if (!selectedRoute) {
+      router.replace("/booking/results");
+    }
+  }, [selectedRoute]);
 
-  const handleSeatPress = (seat: string) => {
-    if (occupiedSeats.has(seat)) return;
-    setSelectedSeat(seat);
+  if (!selectedRoute) {
+    return null;
+  }
+
+  const handleSeatPress = (seatId: string) => {
+    if (occupiedSeats.has(seatId)) return;
+    toggleSeat(seatId);
   };
 
   const handleContinue = () => {
-    if (!selectedSeat) {
-      Alert.alert("Selecciona un asiento", "Debes elegir un asiento para continuar.");
+    if (selectedSeats.length !== passengers) {
+      Alert.alert(
+        "Selecciona tus asientos",
+        `Debes elegir ${passengers} asiento${
+          passengers > 1 ? "s" : ""
+        } para continuar.`
+      );
       return;
     }
 
-    router.push({
-      pathname: "/booking/payment",
-      params: {
-        from: tripData.from,
-        to: tripData.to,
-        operator: tripData.operator,
-        date: tripData.date,
-        departureTime: tripData.departureTime,
-        arrivalTime: tripData.arrivalTime,
-        terminal: tripData.terminal,
-        boardingPoint: tripData.boardingPoint,
-        total: String(tripData.total),
-        seat: selectedSeat,
-      },
-    });
+    router.push("/booking/payment");
   };
-  
+
+  const renderSeat = (seatId: string) => {
+    const isOccupied = occupiedSeats.has(seatId);
+    const isSelected = selectedSeats.includes(seatId);
+
+    return (
+      <TouchableOpacity
+        key={seatId}
+        style={[
+          styles.seat,
+          isOccupied && styles.occupiedSeat,
+          isSelected && styles.selectedSeat,
+        ]}
+        onPress={() => handleSeatPress(seatId)}
+        activeOpacity={0.85}
+        disabled={isOccupied}
+      >
+        <Ionicons
+          name="car-outline"
+          size={16}
+          color={
+            isOccupied ? "#98A2B3" : isSelected ? "#FFFFFF" : "#2F49E3"
+          }
+        />
+        <Text
+          style={[
+            styles.seatText,
+            isOccupied && styles.occupiedSeatText,
+            isSelected && styles.selectedSeatText,
+          ]}
+        >
+          {seatId}
+        </Text>
+      </TouchableOpacity>
+    );
+  };
+
+  const remainingSeats = passengers - selectedSeats.length;
+  const canContinue = selectedSeats.length === passengers;
+
   return (
-  <SafeAreaView style={styles.safeArea}>
-    <ScrollView
-      contentContainerStyle={styles.scrollContent}
-      showsVerticalScrollIndicator={false}
-    >
+    <SafeAreaView style={styles.safeArea}>
       <View style={styles.container}>
         <View style={styles.header}>
           <TouchableOpacity
-            style={styles.iconButton}
-            activeOpacity={0.85}
             onPress={() => router.back()}
+            style={styles.iconButton}
+            activeOpacity={0.8}
           >
-            <Ionicons name="chevron-back" size={24} color={colors.text} />
+            <Ionicons name="chevron-back" size={22} color="#23304A" />
           </TouchableOpacity>
 
           <View style={styles.headerCenter}>
-            <Text style={styles.headerTitle}>Selección de Asiento</Text>
+            <Text style={styles.headerTitle}>Selecciona tus asientos</Text>
             <Text style={styles.headerSubtitle}>
-              {tripData.from.toUpperCase()} → {tripData.to.toUpperCase()}
-            </Text>
-            <Text style={styles.headerMeta}>
-              {tripData.date} · {tripData.departureTime} · {tripData.boardingPoint}
+              {selectedRoute.origin} → {selectedRoute.destination}
             </Text>
           </View>
 
-          <View style={styles.iconButton} />
+          <View style={styles.iconButtonPlaceholder} />
         </View>
 
-        <View style={styles.legendCard}>
-          <View style={styles.legendItem}>
-            <View style={[styles.legendBox, styles.legendFree]} />
-            <Text style={styles.legendText}>Libre</Text>
-          </View>
-
-          <View style={styles.legendItem}>
-            <View style={[styles.legendBox, styles.legendOccupied]} />
-            <Text style={styles.legendText}>Ocupado</Text>
-          </View>
-
-          <View style={styles.legendItem}>
-            <View style={[styles.legendBox, styles.legendSelected]} />
-            <Text style={styles.legendText}>Elegido</Text>
-          </View>
-        </View>
-
-        <View style={styles.busCard}>
-          <View style={styles.busTopIndicator} />
-          <Text style={styles.busFrontText}>FRENTE DEL BUS</Text>
-
-          <View style={styles.driverRow}>
-            <View style={styles.driverBox}>
-              <Ionicons name="person-outline" size={18} color={colors.muted} />
-              <Text style={styles.driverText}>CONDUCTOR</Text>
-            </View>
-
-            <View style={styles.doorBox}>
-              <Ionicons name="exit-outline" size={18} color={colors.muted} />
-            </View>
-          </View>
-
-          <View style={styles.rowsWrapper}>
-            {seatRows.map((row, rowIndex) => (
-              <View key={rowIndex} style={styles.seatRow}>
-                {row.map((seat, seatIndex) => {
-                  if (!seat) {
-                    return (
-                      <View key={`aisle-${rowIndex}-${seatIndex}`} style={styles.aisle}>
-                        <Text style={styles.rowNumber}>{rowIndex + 1}</Text>
-                      </View>
-                    );
-                  }
-
-                  const isOccupied = occupiedSeats.has(seat);
-                  const isSelected = seat === selectedSeat;
-
-                  return (
-                    <TouchableOpacity
-                      key={seat}
-                      style={[
-                        styles.seat,
-                        isOccupied && styles.seatOccupied,
-                        isSelected && styles.seatSelected,
-                      ]}
-                      activeOpacity={0.85}
-                      disabled={isOccupied}
-                      onPress={() => handleSeatPress(seat)}
-                    >
-                      <Text
-                        style={[
-                          styles.seatText,
-                          isOccupied && styles.seatTextOccupied,
-                          isSelected && styles.seatTextSelected,
-                        ]}
-                      >
-                        {seat}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={styles.tripCard}>
+            <View style={styles.tripTop}>
+              <View style={styles.companyBadge}>
+                <Ionicons name="bus-outline" size={18} color="#FFFFFF" />
               </View>
-            ))}
+
+              <View style={styles.tripInfo}>
+                <Text style={styles.companyName}>{selectedRoute.company}</Text>
+                <Text style={styles.busType}>{selectedRoute.busType}</Text>
+              </View>
+            </View>
+
+            <View style={styles.tripMetaRow}>
+              <View style={styles.tripMetaItem}>
+                <Text style={styles.metaLabel}>Salida</Text>
+                <Text style={styles.metaValue}>{selectedRoute.departureTime}</Text>
+              </View>
+
+              <View style={styles.tripMetaItem}>
+                <Text style={styles.metaLabel}>Llegada</Text>
+                <Text style={styles.metaValue}>{selectedRoute.arrivalTime}</Text>
+              </View>
+
+              <View style={styles.tripMetaItem}>
+                <Text style={styles.metaLabel}>Duración</Text>
+                <Text style={styles.metaValue}>{selectedRoute.duration}</Text>
+              </View>
+            </View>
           </View>
 
-          <View style={styles.busBottomIndicator} />
-        </View>
+          <View style={styles.legendCard}>
+            <View style={styles.legendItem}>
+              <View style={[styles.legendDot, styles.availableDot]} />
+              <Text style={styles.legendText}>Libre</Text>
+            </View>
 
-        <View style={styles.noteCard}>
-          <Ionicons
-            name="information-circle-outline"
-            size={18}
-            color={colors.primary}
-          />
-          <Text style={styles.noteText}>
-            Ticket electrónico válido para esta salida específica. No se aceptan
-            cambios 1h antes.
-          </Text>
-        </View>
+            <View style={styles.legendItem}>
+              <View style={[styles.legendDot, styles.occupiedDot]} />
+              <Text style={styles.legendText}>Ocupado</Text>
+            </View>
 
-        <View style={styles.footerCard}>
-          <View style={styles.footerTop}>
-            <View>
-              <Text style={styles.footerLabel}>VIAJE SELECCIONADO</Text>
-              <View style={styles.routeRow}>
-                <View style={styles.selectedSeatBadge}>
-                  <Text style={styles.selectedSeatBadgeText}>{selectedSeat}</Text>
+            <View style={styles.legendItem}>
+              <View style={[styles.legendDot, styles.selectedDot]} />
+              <Text style={styles.legendText}>Elegido</Text>
+            </View>
+          </View>
+
+          <View style={styles.selectionCard}>
+            <Text style={styles.selectionTitle}>Resumen de selección</Text>
+            <Text style={styles.selectionText}>
+              Pasajeros: {passengers}
+            </Text>
+            <Text style={styles.selectionText}>
+              Asientos elegidos:{" "}
+              {selectedSeats.length > 0 ? selectedSeats.join(", ") : "Ninguno"}
+            </Text>
+            <Text style={styles.selectionHint}>
+              {remainingSeats > 0
+                ? `Te falta seleccionar ${remainingSeats} asiento${
+                    remainingSeats > 1 ? "s" : ""
+                  }.`
+                : "Ya puedes continuar al pago."}
+            </Text>
+          </View>
+
+          <View style={styles.busCard}>
+            <View style={styles.driverRow}>
+              <View style={styles.driverBox}>
+                <Ionicons name="person-outline" size={18} color="#2F49E3" />
+                <Text style={styles.driverText}>Conductor</Text>
+              </View>
+            </View>
+
+            <View style={styles.busBody}>
+              {seatRows.map((row, rowIndex) => (
+                <View key={`row-${rowIndex}`} style={styles.seatRow}>
+                  <View style={styles.leftSeats}>
+                    {renderSeat(row[0])}
+                    {renderSeat(row[1])}
+                  </View>
+
+                  <View style={styles.aisle} />
+
+                  <View style={styles.rightSeats}>
+                    {renderSeat(row[2])}
+                    {renderSeat(row[3])}
+                  </View>
                 </View>
-                <Text style={styles.footerRoute}>
-                  {tripData.from} → {tripData.to}
-                </Text>
-              </View>
+              ))}
             </View>
+          </View>
+        </ScrollView>
 
-            <View style={styles.totalBlock}>
-              <Text style={styles.footerLabel}>TOTAL</Text>
-              <Text style={styles.totalText}>L. {tripData.total.toFixed(2)}</Text>
-            </View>
+        <View style={styles.bottomBar}>
+          <View>
+            <Text style={styles.bottomLabel}>Asientos</Text>
+            <Text style={styles.bottomValue}>
+              {selectedSeats.length > 0 ? selectedSeats.join(", ") : "--"}
+            </Text>
           </View>
 
           <TouchableOpacity
-            style={styles.continueButton}
-            activeOpacity={0.9}
+            style={[
+              styles.continueButton,
+              !canContinue && styles.continueButtonDisabled,
+            ]}
             onPress={handleContinue}
+            activeOpacity={0.9}
           >
             <Text style={styles.continueButtonText}>Continuar</Text>
-            <Ionicons name="arrow-forward" size={20} color="#FFFFFF" />
           </TouchableOpacity>
         </View>
       </View>
-    </ScrollView>
-  </SafeAreaView>
-);
+    </SafeAreaView>
+  );
 }
-
-const seatBase = {
-  width: 54,
-  height: 54,
-  borderRadius: 12,
-  justifyContent: "center" as const,
-  alignItems: "center" as const,
-  borderWidth: 1,
-};
 
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: colors.background,
-  },
-  scrollContent: {
-    paddingBottom: 32,
+    backgroundColor: "#EAF1FF",
   },
   container: {
-    flexGrow: 1,
-    backgroundColor: colors.background,
-    paddingHorizontal: 16,
-    paddingTop: 18,
-    paddingBottom: 14,
+    flex: 1,
   },
   header: {
+    paddingHorizontal: 16,
+    paddingTop: 10,
+    paddingBottom: 8,
     flexDirection: "row",
-    alignItems: "flex-start",
+    alignItems: "center",
     justifyContent: "space-between",
-    marginBottom: 16,
   },
   iconButton: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    justifyContent: "center",
+    backgroundColor: "#FFFFFF",
     alignItems: "center",
+    justifyContent: "center",
+  },
+  iconButtonPlaceholder: {
+    width: 40,
+    height: 40,
   },
   headerCenter: {
     flex: 1,
     alignItems: "center",
-    marginHorizontal: 6,
+    paddingHorizontal: 10,
   },
   headerTitle: {
-    fontSize: 22,
+    fontSize: 18,
     fontWeight: "800",
-    color: colors.text,
+    color: "#101828",
     textAlign: "center",
-    lineHeight: 28,
   },
   headerSubtitle: {
-    marginTop: 6,
-    fontSize: 14,
-    fontWeight: "800",
-    color: colors.primary,
+    marginTop: 3,
+    fontSize: 13,
+    color: "#667085",
     textAlign: "center",
   },
-  headerMeta: {
-    marginTop: 2,
+  scrollContent: {
+    paddingHorizontal: 16,
+    paddingBottom: 120,
+  },
+  tripCard: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 22,
+    padding: 16,
+    marginTop: 8,
+    marginBottom: 14,
+    shadowColor: "#000",
+    shadowOpacity: 0.06,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 3,
+  },
+  tripTop: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 14,
+  },
+  companyBadge: {
+    width: 46,
+    height: 46,
+    borderRadius: 14,
+    backgroundColor: "#2F49E3",
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 12,
+  },
+  tripInfo: {
+    flex: 1,
+  },
+  companyName: {
+    fontSize: 16,
+    fontWeight: "800",
+    color: "#101828",
+    marginBottom: 4,
+  },
+  busType: {
     fontSize: 13,
-    color: colors.muted,
-    textAlign: "center",
+    color: "#667085",
+    fontWeight: "600",
+  },
+  tripMetaRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    gap: 10,
+  },
+  tripMetaItem: {
+    flex: 1,
+    backgroundColor: "#F8FAFF",
+    borderRadius: 16,
+    paddingVertical: 12,
+    paddingHorizontal: 10,
+    alignItems: "center",
+  },
+  metaLabel: {
+    fontSize: 12,
+    color: "#98A2B3",
+    marginBottom: 4,
+    fontWeight: "700",
+  },
+  metaValue: {
+    fontSize: 14,
+    color: "#101828",
+    fontWeight: "800",
   },
   legendCard: {
     backgroundColor: "#FFFFFF",
-    borderRadius: 18,
+    borderRadius: 20,
     paddingVertical: 14,
-    paddingHorizontal: 18,
+    paddingHorizontal: 16,
+    marginBottom: 14,
     flexDirection: "row",
-    justifyContent: "space-between",
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: colors.border,
+    justifyContent: "space-around",
+    alignItems: "center",
   },
   legendItem: {
+    flexDirection: "row",
     alignItems: "center",
-    gap: 6,
   },
-  legendBox: {
-    width: 24,
-    height: 24,
-    borderRadius: 8,
-    borderWidth: 2,
+  legendDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    marginRight: 8,
   },
-  legendFree: {
-    backgroundColor: "#FFFFFF",
-    borderColor: "#BFD0E6",
+  availableDot: {
+    backgroundColor: "#DDE7FF",
+    borderWidth: 1,
+    borderColor: "#2F49E3",
   },
-  legendOccupied: {
-    backgroundColor: "#E2E8F0",
-    borderColor: "#E2E8F0",
+  occupiedDot: {
+    backgroundColor: "#E5E7EB",
   },
-  legendSelected: {
-    backgroundColor: colors.accent,
-    borderColor: colors.accent,
+  selectedDot: {
+    backgroundColor: "#2F49E3",
   },
   legendText: {
-    fontSize: 12,
-    color: colors.muted,
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#475467",
+  },
+  selectionCard: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 20,
+    padding: 16,
+    marginBottom: 14,
+  },
+  selectionTitle: {
+    fontSize: 15,
+    fontWeight: "800",
+    color: "#101828",
+    marginBottom: 10,
+  },
+  selectionText: {
+    fontSize: 14,
+    color: "#344054",
+    marginBottom: 4,
     fontWeight: "600",
+  },
+  selectionHint: {
+    marginTop: 8,
+    fontSize: 13,
+    color: "#2F49E3",
+    fontWeight: "700",
   },
   busCard: {
     backgroundColor: "#FFFFFF",
-    borderRadius: 36,
-    paddingTop: 18,
-    paddingBottom: 20,
-    paddingHorizontal: 18,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  busTopIndicator: {
-    width: 90,
-    height: 5,
-    borderRadius: 3,
-    backgroundColor: "#D9E1ED",
-    alignSelf: "center",
-    marginBottom: 10,
-  },
-  busFrontText: {
-    textAlign: "center",
-    fontSize: 12,
-    fontWeight: "800",
-    color: colors.muted,
-    marginBottom: 16,
+    borderRadius: 24,
+    padding: 18,
+    shadowColor: "#000",
+    shadowOpacity: 0.06,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 3,
   },
   driverRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 16,
+    alignItems: "flex-end",
+    marginBottom: 18,
   },
   driverBox: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
-    backgroundColor: "#F8FAFC",
-    borderRadius: 12,
+    backgroundColor: "#F3F6FF",
+    borderRadius: 14,
     paddingVertical: 8,
-    paddingHorizontal: 10,
+    paddingHorizontal: 12,
   },
   driverText: {
-    fontSize: 12,
+    marginLeft: 6,
+    fontSize: 13,
+    color: "#2F49E3",
     fontWeight: "700",
-    color: colors.muted,
   },
-  doorBox: {
-    width: 42,
-    height: 42,
-    borderRadius: 12,
-    backgroundColor: "#F8FAFC",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  rowsWrapper: {
-    gap: 12,
+  busBody: {
+    gap: 14,
   },
   seatRow: {
     flexDirection: "row",
-    justifyContent: "center",
     alignItems: "center",
-    gap: 8,
+    justifyContent: "center",
   },
-  seat: {
-    ...seatBase,
-    backgroundColor: "#FFFFFF",
-    borderColor: "#BFD0E6",
-  },
-  seatOccupied: {
-    backgroundColor: "#E2E8F0",
-    borderColor: "#E2E8F0",
-  },
-  seatSelected: {
-    backgroundColor: colors.accent,
-    borderColor: colors.accent,
-  },
-  seatText: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: colors.text,
-  },
-  seatTextOccupied: {
-    color: "#94A3B8",
-  },
-  seatTextSelected: {
-    color: "#FFFFFF",
+  leftSeats: {
+    flexDirection: "row",
+    gap: 10,
   },
   aisle: {
-    width: 34,
-    justifyContent: "center",
-    alignItems: "center",
+    width: 26,
   },
-  rowNumber: {
-    fontSize: 14,
-    color: "#94A3B8",
-    fontWeight: "700",
-  },
-  busBottomIndicator: {
-    width: 110,
-    height: 5,
-    borderRadius: 3,
-    backgroundColor: "#D9E1ED",
-    alignSelf: "center",
-    marginTop: 18,
-  },
-  noteCard: {
-    marginTop: 16,
-    backgroundColor: "#EAF3FF",
-    borderRadius: 18,
-    paddingVertical: 14,
-    paddingHorizontal: 14,
+  rightSeats: {
     flexDirection: "row",
-    gap: 8,
-    alignItems: "flex-start",
-    borderWidth: 1,
-    borderColor: "#D7E7FF",
-  },
-  noteText: {
-    flex: 1,
-    fontSize: 13,
-    color: colors.text,
-    lineHeight: 18,
-  },
-  footerCard: {
-    marginTop: 16,
-    backgroundColor: "#FFFFFF",
-    borderRadius: 24,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  footerTop: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
-    marginBottom: 16,
-    gap: 12,
-  },
-  footerLabel: {
-    fontSize: 11,
-    fontWeight: "800",
-    color: colors.muted,
-  },
-  routeRow: {
-    marginTop: 8,
-    flexDirection: "row",
-    alignItems: "center",
     gap: 10,
-    maxWidth: "72%",
   },
-  selectedSeatBadge: {
-    backgroundColor: colors.accent,
-    borderRadius: 10,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
+  seat: {
+    width: 64,
+    height: 64,
+    borderRadius: 18,
+    backgroundColor: "#EEF4FF",
+    borderWidth: 1.5,
+    borderColor: "#C7D7FE",
+    alignItems: "center",
+    justifyContent: "center",
   },
-  selectedSeatBadgeText: {
+  occupiedSeat: {
+    backgroundColor: "#F2F4F7",
+    borderColor: "#E4E7EC",
+  },
+  selectedSeat: {
+    backgroundColor: "#2F49E3",
+    borderColor: "#2F49E3",
+  },
+  seatText: {
+    marginTop: 4,
+    fontSize: 13,
+    fontWeight: "800",
+    color: "#2F49E3",
+  },
+  occupiedSeatText: {
+    color: "#98A2B3",
+  },
+  selectedSeatText: {
     color: "#FFFFFF",
-    fontWeight: "800",
+  },
+  bottomBar: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "#FFFFFF",
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingHorizontal: 18,
+    paddingTop: 14,
+    paddingBottom: 20,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    shadowColor: "#000",
+    shadowOpacity: 0.08,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: -4 },
+    elevation: 10,
+  },
+  bottomLabel: {
     fontSize: 12,
+    color: "#98A2B3",
+    fontWeight: "700",
+    marginBottom: 4,
   },
-  footerRoute: {
-    fontSize: 16,
+  bottomValue: {
+    fontSize: 15,
+    color: "#101828",
     fontWeight: "800",
-    color: colors.text,
-    flexShrink: 1,
-    lineHeight: 20,
-  },
-  totalBlock: {
-    alignItems: "flex-end",
-  },
-  totalText: {
-    marginTop: 6,
-    fontSize: 20,
-    fontWeight: "800",
-    color: colors.primary,
+    maxWidth: 160,
   },
   continueButton: {
-    backgroundColor: colors.primary,
+    minWidth: 150,
+    backgroundColor: "#2F49E3",
     borderRadius: 18,
-    paddingVertical: 16,
-    paddingHorizontal: 18,
-    flexDirection: "row",
-    justifyContent: "center",
+    paddingHorizontal: 20,
+    paddingVertical: 15,
     alignItems: "center",
-    gap: 8,
+    justifyContent: "center",
+  },
+  continueButtonDisabled: {
+    opacity: 0.65,
   },
   continueButtonText: {
-    color: "#FFFFFF",
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: "800",
+    color: "#FFFFFF",
   },
 });
