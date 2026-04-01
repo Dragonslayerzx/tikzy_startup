@@ -1,10 +1,10 @@
 {
   "expo": {
-    "name": "tikzy-app",
+    "name": "Tikzy",
     "slug": "tikzy-app",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/icon.png",
+    "icon": "./assets/images/tikzy_log.png",
     "scheme": "tikzyapp",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
