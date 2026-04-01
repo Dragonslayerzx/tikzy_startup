@@ -9,6 +9,7 @@ import {
   View,
 } from "react-native";
 import { useFocusEffect, useRouter } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
 
 import Screen from "@/src/components/ui/Screen";
 import { colors } from "@/src/theme/colors";
@@ -23,6 +24,51 @@ const FILTERS: { label: string; value: TripStatus }[] = [
   { label: "Completed", value: "completed" },
   { label: "Cancelled", value: "cancelled" },
 ];
+
+type StatusMeta = {
+  label: string;
+  icon: keyof typeof Ionicons.glyphMap;
+  bg: string;
+  text: string;
+  border: string;
+};
+
+function getStatusMeta(status: TripStatus): StatusMeta {
+  switch (status) {
+    case "upcoming":
+      return {
+        label: "Upcoming",
+        icon: "time-outline",
+        bg: "#E8F1FF",
+        text: "#1D4ED8",
+        border: "#BBD3FF",
+      };
+    case "completed":
+      return {
+        label: "Completed",
+        icon: "checkmark-circle-outline",
+        bg: "#EAF9F0",
+        text: "#15803D",
+        border: "#BFE8CB",
+      };
+    case "cancelled":
+      return {
+        label: "Cancelled",
+        icon: "close-circle-outline",
+        bg: "#FDECEC",
+        text: "#B91C1C",
+        border: "#F5BDBD",
+      };
+    default:
+      return {
+        label: "Upcoming",
+        icon: "time-outline",
+        bg: "#E8F1FF",
+        text: "#1D4ED8",
+        border: "#BBD3FF",
+      };
+  }
+}
 
 export default function TripsScreen() {
   const router = useRouter();
@@ -61,38 +107,22 @@ export default function TripsScreen() {
       );
   }, [trips, selectedFilter]);
 
+  const tripCounts = useMemo(() => {
+    return {
+      upcoming: trips.filter((trip) => trip.status === "upcoming").length,
+      completed: trips.filter((trip) => trip.status === "completed").length,
+      cancelled: trips.filter((trip) => trip.status === "cancelled").length,
+    };
+  }, [trips]);
+
   const onRefresh = async () => {
     setRefreshing(true);
     await loadTrips();
   };
 
-  function getStatusText(status: TripStatus) {
-    switch (status) {
-      case "upcoming":
-        return "Upcoming";
-      case "completed":
-        return "Completed";
-      case "cancelled":
-        return "Cancelled";
-      default:
-        return status;
-    }
-  }
-
-  function getStatusStyle(status: TripStatus) {
-    switch (status) {
-      case "upcoming":
-        return styles.statusUpcoming;
-      case "completed":
-        return styles.statusCompleted;
-      case "cancelled":
-        return styles.statusCancelled;
-      default:
-        return styles.statusUpcoming;
-    }
-  }
-
   function renderTripCard({ item }: { item: StoredTrip }) {
+    const statusMeta = getStatusMeta(item.status);
+
     return (
       <Pressable
         style={styles.card}
@@ -100,14 +130,39 @@ export default function TripsScreen() {
       >
         <View style={styles.cardTop}>
           <View style={styles.routeBlock}>
-            <Text style={styles.routeText}>
-              {item.origin} → {item.destination}
-            </Text>
+            <View style={styles.routeRow}>
+              <Ionicons
+                name="bus-outline"
+                size={18}
+                color={colors.primary}
+                style={styles.routeIcon}
+              />
+              <Text style={styles.routeText}>
+                {item.origin} → {item.destination}
+              </Text>
+            </View>
+
             <Text style={styles.companyText}>{item.company}</Text>
           </View>
 
-          <View style={[styles.statusBadge, getStatusStyle(item.status)]}>
-            <Text style={styles.statusText}>{getStatusText(item.status)}</Text>
+          <View
+            style={[
+              styles.statusBadge,
+              {
+                backgroundColor: statusMeta.bg,
+                borderColor: statusMeta.border,
+              },
+            ]}
+          >
+            <Ionicons
+              name={statusMeta.icon}
+              size={14}
+              color={statusMeta.text}
+              style={styles.statusIcon}
+            />
+            <Text style={[styles.statusText, { color: statusMeta.text }]}>
+              {statusMeta.label}
+            </Text>
           </View>
         </View>
 
@@ -157,6 +212,7 @@ export default function TripsScreen() {
         <View style={styles.filtersContainer}>
           {FILTERS.map((filter) => {
             const isActive = selectedFilter === filter.value;
+            const count = tripCounts[filter.value];
 
             return (
               <Pressable
@@ -172,6 +228,22 @@ export default function TripsScreen() {
                 >
                   {filter.label}
                 </Text>
+
+                <View
+                  style={[
+                    styles.countBadge,
+                    isActive && styles.countBadgeActive,
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.countText,
+                      isActive && styles.countTextActive,
+                    ]}
+                  >
+                    {count}
+                  </Text>
+                </View>
               </Pressable>
             );
           })}
@@ -184,9 +256,15 @@ export default function TripsScreen() {
           </View>
         ) : filteredTrips.length === 0 ? (
           <View style={styles.emptyBox}>
+            <Ionicons
+              name="ticket-outline"
+              size={34}
+              color={colors.muted}
+              style={styles.emptyIcon}
+            />
             <Text style={styles.emptyTitle}>No trips here yet</Text>
             <Text style={styles.emptyText}>
-              There are no {selectedFilter} trips to display.
+              There are no {selectedFilter} trips to display right now.
             </Text>
           </View>
         ) : (
@@ -229,6 +307,9 @@ const styles = StyleSheet.create({
     flexWrap: "wrap",
   },
   filterChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
     paddingVertical: 10,
     paddingHorizontal: 14,
     borderRadius: 999,
@@ -246,6 +327,26 @@ const styles = StyleSheet.create({
     color: colors.text,
   },
   filterTextActive: {
+    color: "#fff",
+  },
+  countBadge: {
+    minWidth: 22,
+    height: 22,
+    borderRadius: 999,
+    backgroundColor: "#EEF2FF",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 6,
+  },
+  countBadgeActive: {
+    backgroundColor: "rgba(255,255,255,0.18)",
+  },
+  countText: {
+    fontSize: 11,
+    fontWeight: "800",
+    color: colors.primary,
+  },
+  countTextActive: {
     color: "#fff",
   },
   listContent: {
@@ -274,34 +375,39 @@ const styles = StyleSheet.create({
   routeBlock: {
     flex: 1,
   },
+  routeRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 4,
+    paddingRight: 8,
+  },
+  routeIcon: {
+    marginRight: 6,
+  },
   routeText: {
+    flexShrink: 1,
     fontSize: 17,
     fontWeight: "800",
     color: colors.text,
-    marginBottom: 4,
   },
   companyText: {
     fontSize: 13,
     color: colors.muted,
   },
   statusBadge: {
+    flexDirection: "row",
+    alignItems: "center",
     paddingVertical: 6,
     paddingHorizontal: 10,
     borderRadius: 999,
+    borderWidth: 1,
   },
-  statusUpcoming: {
-    backgroundColor: "#DDEBFF",
-  },
-  statusCompleted: {
-    backgroundColor: "#DDF5E6",
-  },
-  statusCancelled: {
-    backgroundColor: "#FFE0E0",
+  statusIcon: {
+    marginRight: 4,
   },
   statusText: {
     fontSize: 12,
     fontWeight: "800",
-    color: "#222",
   },
   infoRow: {
     flexDirection: "row",
@@ -355,6 +461,9 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
     alignItems: "center",
+  },
+  emptyIcon: {
+    marginBottom: 10,
   },
   emptyTitle: {
     fontSize: 18,
