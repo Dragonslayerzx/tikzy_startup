@@ -1,24 +1,27 @@
 import Button from "@/src/components/ui/Button";
 import Input from "@/src/components/ui/Input";
 import Screen from "@/src/components/ui/Screen";
+import { images } from "@/constants/images"; // or "@/src/constants/images" if that's your real path
 import { colors } from "@/src/theme/colors";
-import { Link } from "expo-router";
+import { Link, useRouter } from "expo-router";
 import {
-    Image,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  Image,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from "react-native";
 
 export default function LoginScreen() {
+  const router = useRouter();
+
   return (
     <Screen>
       <View style={styles.outer}>
         <View style={styles.phoneFrame}>
           <View style={styles.topSection}>
             <Image
-              source={require("../../assets/images/T.png")}
+              source={images.logo}
               style={styles.logo}
               resizeMode="contain"
             />
@@ -38,7 +41,10 @@ export default function LoginScreen() {
               <Text style={styles.forgot}>¿Olvidé mi contraseña?</Text>
             </TouchableOpacity>
 
-            <Button title="Iniciar sesión" />
+            <Button
+              title="Iniciar sesión"
+              onPress={() => router.replace("/(tabs)/home")}
+            />
 
             <View style={styles.dividerRow}>
               <View style={styles.divider} />
