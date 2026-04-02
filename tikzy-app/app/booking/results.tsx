@@ -1,142 +1,89 @@
-import React, { useEffect, useMemo, useState } from "react";
+import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
+import React, { useEffect, useMemo, useState } from "react";
 import {
+  ActivityIndicator,
+  RefreshControl,
   SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
-  View,
+  View
 } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
-import { RouteOption, useBookingStore } from "@/src/store/useBookingStore";
 
-type TripItem = {
-  id: string;
-  company: string;
-  model: string;
-  rating: number;
-  reviews: string;
-  departure: string;
-  arrival: string;
-  duration: string;
-  type: string;
-  pickup: string;
-  price: string;
-};
+import { apiFetch } from "@/src/services/api";
+import { useBookingStore } from "@/src/store/useBookingStore";
+import type { ScheduledTripSearchItem } from "@/src/types/tikzy";
 
-const trips: TripItem[] = [
-  {
-    id: "1",
-    company: "Transportes San Pedro",
-    model: "MERCEDES BENZ O-500",
-    rating: 4.5,
-    reviews: "1.1k",
-    departure: "10:00",
-    arrival: "15:00",
-    duration: "5h 00m",
-    type: "Directo",
-    pickup: "Punto de encuentro: Terminal Mall Premier",
-    price: "L. 150",
-  },
-  {
-    id: "2",
-    company: "Transportes Carolina",
-    model: "MERCEDES - MARCO POLO",
-    rating: 4.8,
-    reviews: "2.4k",
-    departure: "12:00",
-    arrival: "17:00",
-    duration: "5h 00m",
-    type: "Directo",
-    pickup: "Punto de encuentro: Terminal Comayagüela",
-    price: "L. 200",
-  },
-  {
-    id: "3",
-    company: "Transportes Cristina",
-    model: "MERCEDES - TURISMO",
-    rating: 4.2,
-    reviews: "800",
-    departure: "13:00",
-    arrival: "18:30",
-    duration: "5h 30m",
-    type: "1 Parada",
-    pickup: "Punto de encuentro: Terminal Blvd. Fuerzas Armadas",
-    price: "L. 220",
-  },
-];
+function formatDuration(minutes: number) {
+  const hrs = Math.floor(minutes / 60);
+  const mins = minutes % 60;
+  return `${hrs}h ${mins.toString().padStart(2, "0")}m`;
+}
 
-type FilterType = "cheapest" | "fastest" | "company";
+function formatPrice(value: string) {
+  const amount = Number(value);
+  if (Number.isNaN(amount)) return value;
+  return `L. ${amount.toFixed(2)}`;
+}
 
 export default function ResultsScreen() {
   const origin = useBookingStore((state) => state.origin);
   const destination = useBookingStore((state) => state.destination);
   const date = useBookingStore((state) => state.date);
   const passengers = useBookingStore((state) => state.passengers);
-  const setSelectedRoute = useBookingStore((state) => state.setSelectedRoute);
+  const setSelectedTrip = useBookingStore((state) => state.setSelectedTrip);
 
-  const [selectedFilter, setSelectedFilter] = useState<FilterType>("cheapest");
+  const [trips, setTrips] = useState<ScheduledTripSearchItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState("");
+
+  const queryString = useMemo(() => {
+    return `/scheduled-trips/search?origin=${encodeURIComponent(
+      origin
+    )}&destination=${encodeURIComponent(destination)}&date=${encodeURIComponent(
+      date
+    )}&passengers=${passengers}`;
+  }, [origin, destination, date, passengers]);
+
+  const loadTrips = async (isRefresh = false) => {
+    try {
+      if (isRefresh) {
+        setRefreshing(true);
+      } else {
+        setLoading(true);
+      }
+
+      setError("");
+      const data = await apiFetch<ScheduledTripSearchItem[]>(queryString);
+      setTrips(data);
+    } catch (err) {
+      console.error("Error loading trips:", err);
+      setTrips([]);
+      setError(
+        err instanceof Error ? err.message : "No se pudieron cargar las rutas."
+      );
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
 
   useEffect(() => {
     if (!origin || !destination || !date) {
       router.replace("/(tabs)/home");
-    }
-  }, [origin, destination, date]);
-
-  const sortedTrips = useMemo(() => {
-    const data = [...trips];
-
-    if (selectedFilter === "cheapest") {
-      return data.sort(
-        (a, b) =>
-          Number(a.price.replace("L.", "").trim()) -
-          Number(b.price.replace("L.", "").trim())
-      );
+      return;
     }
 
-    if (selectedFilter === "fastest") {
-      const parseDuration = (value: string) => {
-        const match = value.match(/(\d+)h\s*(\d+)m/i);
-        if (!match) return 0;
-        const hours = Number(match[1]);
-        const minutes = Number(match[2]);
-        return hours * 60 + minutes;
-      };
+    loadTrips();
+  }, [origin, destination, date, passengers]);
 
-      return data.sort(
-        (a, b) => parseDuration(a.duration) - parseDuration(b.duration)
-      );
-    }
-
-    if (selectedFilter === "company") {
-      return data.sort((a, b) => a.company.localeCompare(b.company));
-    }
-
-    return data;
-  }, [selectedFilter]);
-
-  const handleSelectRoute = (trip: TripItem) => {
-    const route: RouteOption = {
-      id: trip.id,
-      company: trip.company,
-      busType: trip.model,
-      origin,
-      destination,
-      departureTime: trip.departure,
-      arrivalTime: trip.arrival,
-      duration: trip.duration,
-      price: Number(trip.price.replace("L.", "").trim()),
-      meetingPoint: trip.pickup,
-      busNumber: "#42",
-    };
-
-    setSelectedRoute(route);
+  const handleSelectTrip = (trip: ScheduledTripSearchItem) => {
+    setSelectedTrip(trip);
     router.push("/booking/seats");
   };
-
-  const passengerLabel =
-    passengers > 1 ? `${passengers} Pasajeros` : `${passengers} Pasajero`;
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -151,170 +98,136 @@ export default function ResultsScreen() {
           </TouchableOpacity>
 
           <View style={styles.headerCenter}>
-            <Text style={styles.routeTitle}>
+            <Text style={styles.headerTitle}>Resultados</Text>
+            <Text style={styles.headerSubtitle}>
               {origin} → {destination}
-            </Text>
-            <Text style={styles.routeMeta}>
-              {date} · {passengerLabel}
             </Text>
           </View>
 
-          <TouchableOpacity style={styles.iconButton} activeOpacity={0.8}>
-            <Ionicons name="options-outline" size={20} color="#23304A" />
-          </TouchableOpacity>
+          <View style={styles.iconButtonPlaceholder} />
         </View>
 
-        <View style={styles.filtersRow}>
-          <TouchableOpacity
-            style={[
-              styles.filterChip,
-              selectedFilter === "cheapest" && styles.filterChipActive,
-            ]}
-            onPress={() => setSelectedFilter("cheapest")}
-            activeOpacity={0.85}
-          >
-            <Text
-              style={[
-                styles.filterText,
-                selectedFilter === "cheapest" && styles.filterTextActive,
-              ]}
-            >
-              Más barato
-            </Text>
-            <Ionicons
-              name="chevron-down"
-              size={14}
-              color={selectedFilter === "cheapest" ? "#FFFFFF" : "#667085"}
-            />
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[
-              styles.filterChip,
-              selectedFilter === "fastest" && styles.filterChipActive,
-            ]}
-            onPress={() => setSelectedFilter("fastest")}
-            activeOpacity={0.85}
-          >
-            <Text
-              style={[
-                styles.filterText,
-                selectedFilter === "fastest" && styles.filterTextActive,
-              ]}
-            >
-              Más rápido
-            </Text>
-            <Ionicons
-              name="chevron-down"
-              size={14}
-              color={selectedFilter === "fastest" ? "#FFFFFF" : "#667085"}
-            />
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[
-              styles.filterChip,
-              selectedFilter === "company" && styles.filterChipActive,
-            ]}
-            onPress={() => setSelectedFilter("company")}
-            activeOpacity={0.85}
-          >
-            <Text
-              style={[
-                styles.filterText,
-                selectedFilter === "company" && styles.filterTextActive,
-              ]}
-            >
-              Empresa
-            </Text>
-            <Ionicons
-              name="chevron-down"
-              size={14}
-              color={selectedFilter === "company" ? "#FFFFFF" : "#667085"}
-            />
-          </TouchableOpacity>
+        <View style={styles.searchSummary}>
+          <Text style={styles.searchSummaryText}>
+            Fecha: {date} · Pasajeros: {passengers}
+          </Text>
         </View>
 
-        <ScrollView
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={styles.scrollContent}
-        >
-          {sortedTrips.map((trip) => (
-            <View key={trip.id} style={styles.card}>
-              <View style={styles.cardTop}>
-                <View style={styles.companyBadge}>
-                  <Ionicons name="bus-outline" size={18} color="#FFFFFF" />
+        {loading ? (
+          <View style={styles.centerBox}>
+            <ActivityIndicator size="large" color="#2F49E3" />
+            <Text style={styles.centerText}>Buscando rutas disponibles...</Text>
+          </View>
+        ) : (
+          <ScrollView
+            contentContainerStyle={styles.scrollContent}
+            showsVerticalScrollIndicator={false}
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={() => loadTrips(true)}
+              />
+            }
+          >
+            {error ? (
+              <View style={styles.errorCard}>
+                <Ionicons
+                  name="alert-circle-outline"
+                  size={22}
+                  color="#DC2626"
+                />
+                <Text style={styles.errorTitle}>No se pudieron cargar rutas</Text>
+                <Text style={styles.errorText}>{error}</Text>
+
+                <TouchableOpacity
+                  style={styles.retryButton}
+                  onPress={() => loadTrips()}
+                  activeOpacity={0.9}
+                >
+                  <Text style={styles.retryButtonText}>Intentar de nuevo</Text>
+                </TouchableOpacity>
+              </View>
+            ) : null}
+
+            {!error && trips.length === 0 ? (
+              <View style={styles.emptyCard}>
+                <Ionicons name="bus-outline" size={40} color="#2F49E3" />
+                <Text style={styles.emptyTitle}>No encontramos rutas</Text>
+                <Text style={styles.emptyText}>
+                  Prueba con otra fecha, origen o destino.
+                </Text>
+              </View>
+            ) : null}
+
+            {trips.map((trip) => (
+              <View key={trip.id} style={styles.tripCard}>
+                <View style={styles.tripTopRow}>
+                  <View style={styles.companyBox}>
+                    <Text style={styles.companyName}>{trip.company_name}</Text>
+                    <Text style={styles.busType}>{trip.bus_type}</Text>
+                  </View>
+
+                  <View style={styles.pricePill}>
+                    <Text style={styles.priceText}>{formatPrice(trip.price)}</Text>
+                  </View>
                 </View>
 
-                <View style={styles.companyInfo}>
-                  <Text style={styles.companyName}>{trip.company}</Text>
+                <View style={styles.timeRow}>
+                  <View style={styles.timeBlock}>
+                    <Text style={styles.timeLabel}>Salida</Text>
+                    <Text style={styles.timeValue}>{trip.departure_time}</Text>
+                  </View>
 
-                  <View style={styles.ratingRow}>
-                    <Ionicons name="star" size={13} color="#F5B301" />
-                    <Text style={styles.ratingText}>
-                      {trip.rating} ({trip.reviews})
+                  <View style={styles.centerRoute}>
+                    <Text style={styles.routeDuration}>
+                      {formatDuration(trip.estimated_duration_minutes)}
+                    </Text>
+                    <Text style={styles.routeArrow}>→</Text>
+                  </View>
+
+                  <View style={styles.timeBlock}>
+                    <Text style={styles.timeLabel}>Llegada</Text>
+                    <Text style={styles.timeValue}>{trip.arrival_time}</Text>
+                  </View>
+                </View>
+
+                <View style={styles.metaWrap}>
+                  <View style={styles.metaItem}>
+                    <Ionicons name="location-outline" size={16} color="#2F49E3" />
+                    <Text style={styles.metaText}>
+                      {trip.meeting_point || "Punto de encuentro por definir"}
                     </Text>
                   </View>
-                </View>
 
-                <View style={styles.modelChip}>
-                  <Text style={styles.modelChipText} numberOfLines={1}>
-                    {trip.model}
-                  </Text>
-                </View>
-              </View>
-
-              <View style={styles.scheduleRow}>
-                <View style={styles.scheduleBlock}>
-                  <Text style={styles.timeText}>{trip.departure}</Text>
-                  <Text style={styles.stationText}>TGU</Text>
-                </View>
-
-                <View style={styles.middleBlock}>
-                  <Text style={styles.durationText}>{trip.duration}</Text>
-
-                  <View style={styles.lineRow}>
-                    <View style={styles.line} />
-                    <Ionicons name="bus-outline" size={14} color="#667085" />
-                    <View style={styles.line} />
+                  <View style={styles.metaItem}>
+                    <Ionicons name="git-compare-outline" size={16} color="#2F49E3" />
+                    <Text style={styles.metaText}>{trip.service_type}</Text>
                   </View>
 
-                  <Text style={styles.tripTypeText}>{trip.type}</Text>
-                </View>
+                  <View style={styles.metaItem}>
+                    <Ionicons name="people-outline" size={16} color="#2F49E3" />
+                    <Text style={styles.metaText}>
+                      {trip.available_seats} asientos disponibles
+                    </Text>
+                  </View>
 
-                <View style={styles.scheduleBlock}>
-                  <Text style={styles.timeText}>{trip.arrival}</Text>
-                  <Text style={styles.stationText}>SPS</Text>
-                </View>
-              </View>
-
-              <View style={styles.pickupBox}>
-                <Ionicons
-                  name="location-outline"
-                  size={15}
-                  color="#5A67D8"
-                  style={styles.pickupIcon}
-                />
-                <Text style={styles.pickupText}>{trip.pickup}</Text>
-              </View>
-
-              <View style={styles.cardBottom}>
-                <View>
-                  <Text style={styles.priceLabel}>DESDE</Text>
-                  <Text style={styles.priceText}>{trip.price}</Text>
+                  <View style={styles.metaItem}>
+                    <Ionicons name="bus-outline" size={16} color="#2F49E3" />
+                    <Text style={styles.metaText}>{trip.vehicle_label}</Text>
+                  </View>
                 </View>
 
                 <TouchableOpacity
                   style={styles.selectButton}
-                  onPress={() => handleSelectRoute(trip)}
+                  onPress={() => handleSelectTrip(trip)}
                   activeOpacity={0.9}
                 >
                   <Text style={styles.selectButtonText}>Seleccionar</Text>
                 </TouchableOpacity>
               </View>
-            </View>
-          ))}
-        </ScrollView>
+            ))}
+          </ScrollView>
+        )}
       </View>
     </SafeAreaView>
   );
@@ -327,222 +240,227 @@ const styles = StyleSheet.create({
   },
   container: {
     flex: 1,
-    paddingHorizontal: 14,
-    paddingTop: 8,
   },
   header: {
+    paddingHorizontal: 16,
+    paddingTop: 10,
+    paddingBottom: 8,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    marginBottom: 14,
   },
   iconButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "#FFFFFF",
     alignItems: "center",
     justifyContent: "center",
+  },
+  iconButtonPlaceholder: {
+    width: 40,
+    height: 40,
   },
   headerCenter: {
     flex: 1,
     alignItems: "center",
-    paddingHorizontal: 8,
+    paddingHorizontal: 10,
   },
-  routeTitle: {
+  headerTitle: {
     fontSize: 18,
     fontWeight: "800",
     color: "#101828",
     textAlign: "center",
   },
-  routeMeta: {
+  headerSubtitle: {
     marginTop: 3,
     fontSize: 13,
     color: "#667085",
     textAlign: "center",
   },
-  filtersRow: {
-    flexDirection: "row",
-    gap: 10,
-    marginBottom: 14,
-  },
-  filterChip: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    backgroundColor: "#FFFFFF",
-    borderRadius: 999,
+  searchSummary: {
     paddingHorizontal: 16,
-    paddingVertical: 11,
-    borderWidth: 1,
-    borderColor: "#E5E7EB",
+    paddingBottom: 8,
   },
-  filterChipActive: {
-    backgroundColor: "#2F49E3",
-    borderColor: "#2F49E3",
-  },
-  filterText: {
-    fontSize: 14,
-    fontWeight: "700",
+  searchSummaryText: {
+    fontSize: 13,
     color: "#475467",
+    fontWeight: "600",
   },
-  filterTextActive: {
-    color: "#FFFFFF",
+  centerBox: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 24,
+  },
+  centerText: {
+    marginTop: 12,
+    fontSize: 14,
+    color: "#667085",
+    textAlign: "center",
   },
   scrollContent: {
+    paddingHorizontal: 16,
     paddingBottom: 28,
   },
-  card: {
+  errorCard: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 20,
+    padding: 18,
+    alignItems: "center",
+    marginTop: 12,
+    marginBottom: 12,
+  },
+  errorTitle: {
+    marginTop: 10,
+    fontSize: 16,
+    fontWeight: "800",
+    color: "#111827",
+  },
+  errorText: {
+    marginTop: 8,
+    fontSize: 13,
+    color: "#6B7280",
+    textAlign: "center",
+  },
+  retryButton: {
+    marginTop: 14,
+    backgroundColor: "#2F49E3",
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 14,
+  },
+  retryButtonText: {
+    color: "#FFFFFF",
+    fontWeight: "800",
+  },
+  emptyCard: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 20,
+    padding: 24,
+    alignItems: "center",
+    marginTop: 12,
+  },
+  emptyTitle: {
+    marginTop: 12,
+    fontSize: 18,
+    fontWeight: "800",
+    color: "#111827",
+  },
+  emptyText: {
+    marginTop: 8,
+    fontSize: 14,
+    color: "#6B7280",
+    textAlign: "center",
+  },
+  tripCard: {
     backgroundColor: "#FFFFFF",
     borderRadius: 24,
-    padding: 16,
-    marginBottom: 14,
+    padding: 18,
+    marginTop: 12,
     shadowColor: "#000",
-    shadowOpacity: 0.07,
+    shadowOpacity: 0.06,
     shadowRadius: 10,
     shadowOffset: { width: 0, height: 4 },
     elevation: 3,
   },
-  cardTop: {
+  tripTopRow: {
     flexDirection: "row",
     alignItems: "flex-start",
+    justifyContent: "space-between",
     marginBottom: 16,
+    gap: 10,
   },
-  companyBadge: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
-    backgroundColor: "#0E9F6E",
-    alignItems: "center",
-    justifyContent: "center",
-    marginRight: 12,
-  },
-  companyInfo: {
+  companyBox: {
     flex: 1,
-    paddingRight: 8,
   },
   companyName: {
-    fontSize: 16,
+    fontSize: 17,
     fontWeight: "800",
     color: "#101828",
     marginBottom: 4,
   },
-  ratingRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-  },
-  ratingText: {
-    fontSize: 13,
-    color: "#475467",
-  },
-  modelChip: {
-    maxWidth: 130,
-    backgroundColor: "#F3F6FF",
-    borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-  },
-  modelChipText: {
-    fontSize: 11,
-    fontWeight: "700",
-    color: "#2F49E3",
-  },
-  scheduleRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 14,
-  },
-  scheduleBlock: {
-    alignItems: "center",
-    width: 70,
-  },
-  timeText: {
-    fontSize: 18,
-    fontWeight: "800",
-    color: "#101828",
-  },
-  stationText: {
-    marginTop: 4,
+  busType: {
     fontSize: 13,
     color: "#667085",
-  },
-  middleBlock: {
-    flex: 1,
-    alignItems: "center",
-    paddingHorizontal: 8,
-  },
-  durationText: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: "#2F49E3",
-    marginBottom: 6,
-  },
-  lineRow: {
-    width: "100%",
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-    marginBottom: 6,
-  },
-  line: {
-    flex: 1,
-    height: 1,
-    backgroundColor: "#D0D5DD",
-  },
-  tripTypeText: {
-    fontSize: 13,
-    color: "#667085",
-  },
-  pickupBox: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    backgroundColor: "#F5F7FF",
-    borderRadius: 14,
-    paddingHorizontal: 12,
-    paddingVertical: 12,
-    marginBottom: 16,
-  },
-  pickupIcon: {
-    marginTop: 2,
-    marginRight: 8,
-  },
-  pickupText: {
-    flex: 1,
-    fontSize: 14,
-    color: "#2F49E3",
     fontWeight: "600",
-    lineHeight: 20,
   },
-  cardBottom: {
-    flexDirection: "row",
-    alignItems: "flex-end",
-    justifyContent: "space-between",
-  },
-  priceLabel: {
-    fontSize: 12,
-    fontWeight: "700",
-    color: "#98A2B3",
-    marginBottom: 4,
+  pricePill: {
+    backgroundColor: "#EEF2FF",
+    borderRadius: 999,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
   },
   priceText: {
-    fontSize: 18,
+    fontSize: 14,
     fontWeight: "800",
-    color: "#101828",
+    color: "#2F49E3",
   },
-  selectButton: {
-    minWidth: 140,
-    backgroundColor: "#2F49E3",
-    borderRadius: 18,
+  timeRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 16,
+  },
+  timeBlock: {
+    flex: 1,
+    backgroundColor: "#F8FAFF",
+    borderRadius: 16,
+    paddingVertical: 12,
+    paddingHorizontal: 10,
+    alignItems: "center",
+  },
+  timeLabel: {
+    fontSize: 12,
+    color: "#98A2B3",
+    marginBottom: 4,
+    fontWeight: "700",
+  },
+  timeValue: {
+    fontSize: 15,
+    color: "#101828",
+    fontWeight: "800",
+  },
+  centerRoute: {
+    width: 90,
     alignItems: "center",
     justifyContent: "center",
+  },
+  routeDuration: {
+    fontSize: 12,
+    color: "#667085",
+    fontWeight: "700",
+    marginBottom: 4,
+  },
+  routeArrow: {
+    fontSize: 22,
+    color: "#2F49E3",
+    fontWeight: "800",
+  },
+  metaWrap: {
+    gap: 10,
+    marginBottom: 16,
+  },
+  metaItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  metaText: {
+    flex: 1,
+    fontSize: 13,
+    color: "#475467",
+    fontWeight: "600",
+  },
+  selectButton: {
+    backgroundColor: "#2F49E3",
+    borderRadius: 16,
     paddingVertical: 14,
-    paddingHorizontal: 18,
+    alignItems: "center",
   },
   selectButtonText: {
-    fontSize: 16,
-    fontWeight: "800",
     color: "#FFFFFF",
+    fontSize: 15,
+    fontWeight: "800",
   },
 });

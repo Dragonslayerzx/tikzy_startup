@@ -1,5 +1,6 @@
-import React, { useEffect, useMemo, useState } from "react";
+import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   Alert,
   SafeAreaView,
@@ -10,39 +11,43 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
-import { useBookingStore, PaymentMethod } from "@/src/store/useBookingStore";
+
 import { addTrip } from "@/constants/tripsStorage";
+import { apiFetch } from "@/src/services/api";
+import { PaymentMethod, useBookingStore } from "@/src/store/useBookingStore";
+import type { BookingResponse } from "@/src/types/tikzy";
 
 export default function PaymentScreen() {
   const origin = useBookingStore((state) => state.origin);
   const destination = useBookingStore((state) => state.destination);
   const date = useBookingStore((state) => state.date);
-  const selectedRoute = useBookingStore((state) => state.selectedRoute);
+  const selectedTrip = useBookingStore((state) => state.selectedTrip);
   const selectedSeats = useBookingStore((state) => state.selectedSeats);
   const paymentMethod = useBookingStore((state) => state.paymentMethod);
   const setPaymentMethod = useBookingStore((state) => state.setPaymentMethod);
   const confirmTrip = useBookingStore((state) => state.confirmTrip);
 
+  const [customerName, setCustomerName] = useState("Eros Rivera");
+  const [customerEmail, setCustomerEmail] = useState("eros@example.com");
+  const [customerPhone, setCustomerPhone] = useState("99999999");
+
   const [cardName, setCardName] = useState("");
   const [cardNumber, setCardNumber] = useState("");
   const [expiry, setExpiry] = useState("");
   const [cvv, setCvv] = useState("");
+
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
-    if (!selectedRoute || selectedSeats.length === 0) {
+    if (!selectedTrip || selectedSeats.length === 0) {
       router.replace("/booking/seats");
     }
-  }, [selectedRoute, selectedSeats]);
-
-  if (!selectedRoute) {
-    return null;
-  }
+  }, [selectedTrip, selectedSeats]);
 
   const subtotal = useMemo(() => {
-    return selectedRoute.price * selectedSeats.length;
-  }, [selectedRoute.price, selectedSeats.length]);
+    if (!selectedTrip) return 0;
+    return Number(selectedTrip.price) * selectedSeats.length;
+  }, [selectedTrip, selectedSeats.length]);
 
   const serviceFee = useMemo(() => {
     return 10 * selectedSeats.length;
@@ -57,7 +62,6 @@ export default function PaymentScreen() {
 
   const formatExpiry = (value: string) => {
     const digits = value.replace(/\D/g, "").slice(0, 4);
-
     if (digits.length <= 2) return digits;
     return `${digits.slice(0, 2)}/${digits.slice(2)}`;
   };
@@ -75,8 +79,18 @@ export default function PaymentScreen() {
   const handlePayNow = async () => {
     if (isSubmitting) return;
 
+    if (!selectedTrip) {
+      Alert.alert("Error", "No se encontró el viaje seleccionado.");
+      return;
+    }
+
+    if (!customerName.trim() || !customerEmail.trim() || !customerPhone.trim()) {
+      Alert.alert("Datos incompletos", "Completa tus datos de contacto.");
+      return;
+    }
+
     if (!paymentMethod) {
-      Alert.alert("Método de pago", "Selecciona un método de pago para continuar.");
+      Alert.alert("Método de pago", "Selecciona un método de pago.");
       return;
     }
 
@@ -88,44 +102,55 @@ export default function PaymentScreen() {
       return;
     }
 
-    if (!selectedRoute || selectedSeats.length === 0) {
-      Alert.alert("Reserva inválida", "No se encontró información de la reserva.");
+    if (selectedSeats.length === 0) {
+      Alert.alert("Asientos", "Debes seleccionar al menos un asiento.");
       return;
     }
 
     try {
       setIsSubmitting(true);
 
-      const tripId = Date.now().toString();
+      const booking = await apiFetch<BookingResponse>("/bookings/", {
+        method: "POST",
+        body: JSON.stringify({
+          scheduled_trip_id: selectedTrip.id,
+          customer_name: customerName.trim(),
+          customer_email: customerEmail.trim(),
+          customer_phone: customerPhone.trim(),
+          passenger_count: selectedSeats.length,
+          seat_numbers: selectedSeats,
+        }),
+      });
 
-      const tripData = {
-        id: tripId,
-        tripId,
-        company: selectedRoute.company,
+      const localTrip = {
+        id: booking.id.toString(),
+        tripId: booking.id.toString(),
+        company: selectedTrip.company_name,
         origin,
         destination,
         date,
-        departureTime: selectedRoute.departureTime,
-        arrivalTime: selectedRoute.arrivalTime,
-        seats: selectedSeats,
-        totalPaid: total,
-        terminal: selectedRoute.meetingPoint,
-        busNumber: selectedRoute.busNumber ?? "#42",
-        qrValue: `tikzy-${tripId}`,
+        departureTime: selectedTrip.departure_time,
+        arrivalTime: selectedTrip.arrival_time,
+        seats: booking.seats.map((seat) => seat.seat_number),
+        totalPaid: Number(booking.total_amount),
+        terminal: selectedTrip.meeting_point || "Terminal por definir",
+        busNumber: selectedTrip.vehicle_label,
+        qrValue: `tikzy-booking-${booking.id}`,
         status: "upcoming" as const,
-        createdAt: new Date().toISOString(),
+        createdAt: booking.created_at,
       };
 
-      confirmTrip(tripData);
-
-      await addTrip(tripData);
+      confirmTrip(localTrip);
+      await addTrip(localTrip);
 
       router.push("/booking/confirmation");
     } catch (error) {
-      console.error("Error saving trip:", error);
+      console.error("Error creating booking:", error);
       Alert.alert(
         "Error",
-        "No se pudo completar la reserva. Intenta nuevamente."
+        error instanceof Error
+          ? error.message
+          : "No se pudo completar la reserva."
       );
     } finally {
       setIsSubmitting(false);
@@ -184,6 +209,8 @@ export default function PaymentScreen() {
     );
   };
 
+  if (!selectedTrip) return null;
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.container}>
@@ -211,151 +238,167 @@ export default function PaymentScreen() {
           <View style={styles.summaryCard}>
             <Text style={styles.cardTitle}>Resumen del viaje</Text>
 
-            <View style={styles.summaryTopRow}>
-              <View>
-                <Text style={styles.routeText}>
-                  {origin} → {destination}
-                </Text>
-                <Text style={styles.companyText}>{selectedRoute.company}</Text>
-              </View>
-
-              <View style={styles.timeBox}>
-                <Text style={styles.timeText}>{selectedRoute.departureTime}</Text>
-                <Text style={styles.timeDivider}>→</Text>
-                <Text style={styles.timeText}>{selectedRoute.arrivalTime}</Text>
-              </View>
+            <View style={styles.summaryRow}>
+              <Text style={styles.summaryLabel}>Ruta</Text>
+              <Text style={styles.summaryValue}>
+                {selectedTrip.origin_city} → {selectedTrip.destination_city}
+              </Text>
             </View>
 
-            <View style={styles.infoPillRow}>
-              <View style={styles.infoPill}>
-                <Ionicons name="calendar-outline" size={14} color="#2F49E3" />
-                <Text style={styles.infoPillText}>{date}</Text>
-              </View>
+            <View style={styles.summaryRow}>
+              <Text style={styles.summaryLabel}>Empresa</Text>
+              <Text style={styles.summaryValue}>{selectedTrip.company_name}</Text>
+            </View>
 
-              <View style={styles.infoPill}>
-                <Ionicons name="ticket-outline" size={14} color="#2F49E3" />
-                <Text style={styles.infoPillText}>
-                  {selectedSeats.join(", ")}
-                </Text>
-              </View>
+            <View style={styles.summaryRow}>
+              <Text style={styles.summaryLabel}>Fecha</Text>
+              <Text style={styles.summaryValue}>{date}</Text>
+            </View>
+
+            <View style={styles.summaryRow}>
+              <Text style={styles.summaryLabel}>Hora</Text>
+              <Text style={styles.summaryValue}>
+                {selectedTrip.departure_time} - {selectedTrip.arrival_time}
+              </Text>
+            </View>
+
+            <View style={styles.summaryRow}>
+              <Text style={styles.summaryLabel}>Asientos</Text>
+              <Text style={styles.summaryValue}>{selectedSeats.join(", ")}</Text>
+            </View>
+
+            <View style={styles.summaryRow}>
+              <Text style={styles.summaryLabel}>Punto de salida</Text>
+              <Text style={styles.summaryValue}>
+                {selectedTrip.meeting_point || "Por definir"}
+              </Text>
             </View>
           </View>
 
-          <View style={styles.methodsCard}>
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>Datos del pasajero</Text>
+
+            <TextInput
+              value={customerName}
+              onChangeText={setCustomerName}
+              placeholder="Nombre completo"
+              placeholderTextColor="#9CA3AF"
+              style={styles.input}
+            />
+
+            <TextInput
+              value={customerEmail}
+              onChangeText={setCustomerEmail}
+              placeholder="Correo electrónico"
+              placeholderTextColor="#9CA3AF"
+              autoCapitalize="none"
+              keyboardType="email-address"
+              style={styles.input}
+            />
+
+            <TextInput
+              value={customerPhone}
+              onChangeText={setCustomerPhone}
+              placeholder="Teléfono"
+              placeholderTextColor="#9CA3AF"
+              keyboardType="phone-pad"
+              style={styles.input}
+            />
+          </View>
+
+          <View style={styles.card}>
             <Text style={styles.cardTitle}>Método de pago</Text>
 
             {renderPaymentOption("card", "Tarjeta", "card-outline")}
-            {renderPaymentOption("cash", "Pago en ventanilla", "cash-outline")}
-            {renderPaymentOption(
-              "transfer",
-              "Transferencia",
-              "swap-horizontal-outline"
-            )}
-          </View>
+            {renderPaymentOption("cash", "Efectivo", "cash-outline")}
+            {renderPaymentOption("transfer", "Transferencia", "swap-horizontal-outline")}
 
-          {paymentMethod === "card" && (
-            <View style={styles.formCard}>
-              <Text style={styles.cardTitle}>Datos de la tarjeta</Text>
-
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Nombre del titular</Text>
+            {paymentMethod === "card" && (
+              <View style={styles.cardForm}>
                 <TextInput
                   value={cardName}
                   onChangeText={setCardName}
-                  placeholder="Ej. Juan Pérez"
-                  placeholderTextColor="#98A2B3"
+                  placeholder="Nombre del titular"
+                  placeholderTextColor="#9CA3AF"
                   style={styles.input}
                 />
-              </View>
 
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Número de tarjeta</Text>
                 <TextInput
                   value={cardNumber}
-                  onChangeText={(value) => setCardNumber(formatCardNumber(value))}
-                  placeholder="1234 5678 9012 3456"
-                  placeholderTextColor="#98A2B3"
+                  onChangeText={(text) => setCardNumber(formatCardNumber(text))}
+                  placeholder="Número de tarjeta"
+                  placeholderTextColor="#9CA3AF"
                   keyboardType="numeric"
                   style={styles.input}
                 />
-              </View>
 
-              <View style={styles.row}>
-                <View style={[styles.inputGroup, styles.halfInput]}>
-                  <Text style={styles.inputLabel}>Vencimiento</Text>
+                <View style={styles.rowInputs}>
                   <TextInput
                     value={expiry}
-                    onChangeText={(value) => setExpiry(formatExpiry(value))}
+                    onChangeText={(text) => setExpiry(formatExpiry(text))}
                     placeholder="MM/AA"
-                    placeholderTextColor="#98A2B3"
+                    placeholderTextColor="#9CA3AF"
                     keyboardType="numeric"
-                    style={styles.input}
+                    style={[styles.input, styles.halfInput]}
                   />
-                </View>
 
-                <View style={[styles.inputGroup, styles.halfInput]}>
-                  <Text style={styles.inputLabel}>CVV</Text>
                   <TextInput
                     value={cvv}
-                    onChangeText={(value) =>
-                      setCvv(value.replace(/\D/g, "").slice(0, 4))
+                    onChangeText={(text) =>
+                      setCvv(text.replace(/\D/g, "").slice(0, 4))
                     }
-                    placeholder="123"
-                    placeholderTextColor="#98A2B3"
+                    placeholder="CVV"
+                    placeholderTextColor="#9CA3AF"
                     keyboardType="numeric"
                     secureTextEntry
-                    style={styles.input}
+                    style={[styles.input, styles.halfInput]}
                   />
                 </View>
+
+                <View style={styles.securityBox}>
+                  <Ionicons
+                    name="lock-closed-outline"
+                    size={16}
+                    color="#0E9F6E"
+                  />
+                  <Text style={styles.securityText}>
+                    Tu información de pago se procesa de forma segura.
+                  </Text>
+                </View>
               </View>
+            )}
+          </View>
 
-              <View style={styles.securityBox}>
-                <Ionicons name="lock-closed-outline" size={16} color="#0E9F6E" />
-                <Text style={styles.securityText}>
-                  Tu información de pago se procesa de forma segura.
-                </Text>
-              </View>
-            </View>
-          )}
-
-          <View style={styles.priceCard}>
-            <Text style={styles.cardTitle}>Detalle del pago</Text>
-
-            <View style={styles.priceRow}>
-              <Text style={styles.priceLabel}>Boletos</Text>
-              <Text style={styles.priceValue}>L. {subtotal}</Text>
+          <View style={styles.totalCard}>
+            <View style={styles.summaryRow}>
+              <Text style={styles.summaryLabel}>Subtotal</Text>
+              <Text style={styles.summaryValue}>L. {subtotal.toFixed(2)}</Text>
             </View>
 
-            <View style={styles.priceRow}>
-              <Text style={styles.priceLabel}>Cargo por servicio</Text>
-              <Text style={styles.priceValue}>L. {serviceFee}</Text>
+            <View style={styles.summaryRow}>
+              <Text style={styles.summaryLabel}>Cargo por servicio</Text>
+              <Text style={styles.summaryValue}>L. {serviceFee.toFixed(2)}</Text>
             </View>
 
-            <View style={styles.divider} />
-
-            <View style={styles.priceRow}>
+            <View style={[styles.summaryRow, styles.totalRow]}>
               <Text style={styles.totalLabel}>Total</Text>
-              <Text style={styles.totalValue}>L. {total}</Text>
+              <Text style={styles.totalValue}>L. {total.toFixed(2)}</Text>
             </View>
           </View>
         </ScrollView>
 
         <View style={styles.bottomBar}>
-          <View>
-            <Text style={styles.bottomLabel}>Total a pagar</Text>
-            <Text style={styles.bottomValue}>L. {total}</Text>
-          </View>
-
           <TouchableOpacity
             style={[
               styles.payButton,
-              (!paymentMethod || isSubmitting) && styles.payButtonDisabled,
+              isSubmitting && styles.payButtonDisabled,
             ]}
             onPress={handlePayNow}
             activeOpacity={0.9}
+            disabled={isSubmitting}
           >
             <Text style={styles.payButtonText}>
-              {isSubmitting ? "Procesando..." : "Pagar ahora"}
+              {isSubmitting ? "Procesando..." : "Confirmar reserva"}
             </Text>
           </TouchableOpacity>
         </View>
@@ -419,11 +462,18 @@ const styles = StyleSheet.create({
     padding: 16,
     marginTop: 8,
     marginBottom: 14,
-    shadowColor: "#000",
-    shadowOpacity: 0.06,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 3,
+  },
+  card: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 22,
+    padding: 16,
+    marginBottom: 14,
+  },
+  totalCard: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 22,
+    padding: 16,
+    marginBottom: 14,
   },
   cardTitle: {
     fontSize: 16,
@@ -431,98 +481,49 @@ const styles = StyleSheet.create({
     color: "#101828",
     marginBottom: 14,
   },
-  summaryTopRow: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    justifyContent: "space-between",
-    gap: 12,
-    marginBottom: 12,
-  },
-  routeText: {
-    fontSize: 17,
-    fontWeight: "800",
-    color: "#101828",
-    marginBottom: 4,
-  },
-  companyText: {
-    fontSize: 14,
-    color: "#667085",
-    fontWeight: "600",
-  },
-  timeBox: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#F3F6FF",
-    borderRadius: 14,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-  },
-  timeText: {
-    fontSize: 14,
-    fontWeight: "800",
-    color: "#2F49E3",
-  },
-  timeDivider: {
-    marginHorizontal: 6,
-    color: "#2F49E3",
-    fontWeight: "800",
-  },
-  infoPillRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 10,
-  },
-  infoPill: {
-    flexDirection: "row",
-    alignItems: "center",
+  input: {
     backgroundColor: "#F8FAFF",
-    borderRadius: 999,
-    paddingHorizontal: 12,
-    paddingVertical: 9,
-  },
-  infoPillText: {
-    marginLeft: 6,
-    fontSize: 13,
-    color: "#344054",
-    fontWeight: "700",
-  },
-  methodsCard: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 22,
-    padding: 16,
-    marginBottom: 14,
-    shadowColor: "#000",
-    shadowOpacity: 0.06,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 3,
-  },
-  paymentOption: {
-    borderWidth: 1.5,
-    borderColor: "#E5E7EB",
-    borderRadius: 18,
+    borderRadius: 16,
     paddingHorizontal: 14,
     paddingVertical: 14,
+    fontSize: 14,
+    color: "#111827",
+    fontWeight: "600",
     marginBottom: 12,
-    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+  },
+  rowInputs: {
+    flexDirection: "row",
+    gap: 12,
+  },
+  halfInput: {
+    flex: 1,
+  },
+  paymentOption: {
+    backgroundColor: "#F8FAFF",
+    borderRadius: 18,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    marginBottom: 12,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
   },
   paymentOptionSelected: {
     borderColor: "#2F49E3",
-    backgroundColor: "#F5F7FF",
+    backgroundColor: "#EEF2FF",
   },
   paymentOptionLeft: {
     flexDirection: "row",
     alignItems: "center",
-    flex: 1,
   },
   paymentIconBox: {
-    width: 38,
-    height: 38,
-    borderRadius: 12,
-    backgroundColor: "#EEF4FF",
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "#FFFFFF",
     alignItems: "center",
     justifyContent: "center",
     marginRight: 12,
@@ -531,19 +532,19 @@ const styles = StyleSheet.create({
     backgroundColor: "#2F49E3",
   },
   paymentOptionText: {
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: "700",
     color: "#344054",
   },
   paymentOptionTextSelected: {
-    color: "#101828",
+    color: "#1D4ED8",
   },
   radioOuter: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
     borderWidth: 2,
-    borderColor: "#D0D5DD",
+    borderColor: "#CBD5E1",
     alignItems: "center",
     justifyContent: "center",
   },
@@ -551,154 +552,91 @@ const styles = StyleSheet.create({
     borderColor: "#2F49E3",
   },
   radioInner: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
     backgroundColor: "#2F49E3",
   },
-  formCard: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 22,
-    padding: 16,
-    marginBottom: 14,
-    shadowColor: "#000",
-    shadowOpacity: 0.06,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 3,
-  },
-  inputGroup: {
-    marginBottom: 14,
-  },
-  inputLabel: {
-    fontSize: 13,
-    fontWeight: "700",
-    color: "#475467",
-    marginBottom: 8,
-  },
-  input: {
-    backgroundColor: "#F8FAFF",
-    borderWidth: 1,
-    borderColor: "#E5E7EB",
-    borderRadius: 16,
-    paddingHorizontal: 14,
-    paddingVertical: 14,
-    fontSize: 15,
-    fontWeight: "700",
-    color: "#101828",
-  },
-  row: {
-    flexDirection: "row",
-    gap: 12,
-  },
-  halfInput: {
-    flex: 1,
+  cardForm: {
+    marginTop: 4,
   },
   securityBox: {
-    marginTop: 4,
+    marginTop: 2,
     backgroundColor: "#ECFDF3",
-    borderRadius: 16,
-    paddingHorizontal: 12,
-    paddingVertical: 12,
+    borderRadius: 14,
+    padding: 12,
     flexDirection: "row",
     alignItems: "center",
+    gap: 8,
   },
   securityText: {
-    marginLeft: 8,
     flex: 1,
-    fontSize: 13,
+    fontSize: 12,
     color: "#027A48",
-    fontWeight: "700",
-    lineHeight: 18,
-  },
-  priceCard: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 22,
-    padding: 16,
-    marginBottom: 14,
-    shadowColor: "#000",
-    shadowOpacity: 0.06,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 3,
-  },
-  priceRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 12,
-  },
-  priceLabel: {
-    fontSize: 14,
-    color: "#475467",
     fontWeight: "600",
   },
-  priceValue: {
-    fontSize: 14,
-    color: "#101828",
+  summaryRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: 12,
+    marginBottom: 10,
+  },
+  summaryLabel: {
+    flex: 1,
+    fontSize: 13,
+    color: "#667085",
     fontWeight: "700",
   },
-  divider: {
-    height: 1,
-    backgroundColor: "#E5E7EB",
-    marginVertical: 4,
+  summaryValue: {
+    flex: 1,
+    fontSize: 13,
+    color: "#101828",
+    fontWeight: "800",
+    textAlign: "right",
+  },
+  totalRow: {
+    marginTop: 6,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: "#E5E7EB",
   },
   totalLabel: {
     fontSize: 16,
-    color: "#101828",
     fontWeight: "800",
+    color: "#101828",
   },
   totalValue: {
     fontSize: 18,
-    color: "#2F49E3",
     fontWeight: "800",
+    color: "#2F49E3",
   },
   bottomBar: {
     position: "absolute",
-    left: 0,
-    right: 0,
-    bottom: 0,
+    left: 16,
+    right: 16,
+    bottom: 18,
     backgroundColor: "#FFFFFF",
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    paddingHorizontal: 18,
-    paddingTop: 14,
-    paddingBottom: 20,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
+    borderRadius: 20,
+    padding: 14,
     shadowColor: "#000",
     shadowOpacity: 0.08,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: -4 },
-    elevation: 10,
-  },
-  bottomLabel: {
-    fontSize: 12,
-    color: "#98A2B3",
-    fontWeight: "700",
-    marginBottom: 4,
-  },
-  bottomValue: {
-    fontSize: 18,
-    color: "#101828",
-    fontWeight: "800",
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 5,
   },
   payButton: {
-    minWidth: 160,
     backgroundColor: "#2F49E3",
-    borderRadius: 18,
-    paddingHorizontal: 20,
+    borderRadius: 16,
     paddingVertical: 15,
     alignItems: "center",
-    justifyContent: "center",
   },
   payButtonDisabled: {
-    opacity: 0.65,
+    backgroundColor: "#A5B4FC",
   },
   payButtonText: {
-    fontSize: 16,
-    fontWeight: "800",
     color: "#FFFFFF",
+    fontSize: 15,
+    fontWeight: "800",
   },
 });

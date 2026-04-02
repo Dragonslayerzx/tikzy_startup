@@ -1,24 +1,11 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
+
 import type { StoredTrip } from "@/constants/tripsStorage";
+import type { ScheduledTripSearchItem } from "@/src/types/tikzy";
 
 export type PaymentMethod = "card" | "cash" | "transfer";
-
-export type RouteOption = {
-  id: string;
-  company: string;
-  busType: string;
-  origin: string;
-  destination: string;
-  departureTime: string;
-  arrivalTime: string;
-  duration: string;
-  price: number;
-  meetingPoint: string;
-  busNumber?: string;
-};
-
 export type ConfirmedTrip = StoredTrip;
 
 type BookingState = {
@@ -27,7 +14,7 @@ type BookingState = {
   date: string;
   passengers: number;
 
-  selectedRoute: RouteOption | null;
+  selectedTrip: ScheduledTripSearchItem | null;
   selectedSeats: string[];
   paymentMethod: PaymentMethod | null;
 
@@ -43,12 +30,13 @@ type BookingState = {
     passengers: number;
   }) => void;
 
-  setSelectedRoute: (route: RouteOption) => void;
+  setSelectedTrip: (trip: ScheduledTripSearchItem | null) => void;
+  setSelectedSeats: (seats: string[]) => void;
   toggleSeat: (seat: string) => void;
-  setPaymentMethod: (method: PaymentMethod) => void;
-  confirmTrip: (trip: ConfirmedTrip) => void;
-
   clearSeats: () => void;
+
+  setPaymentMethod: (method: PaymentMethod | null) => void;
+  confirmTrip: (trip: ConfirmedTrip) => void;
   resetBooking: () => void;
 };
 
@@ -57,7 +45,7 @@ const initialState = {
   destination: "",
   date: "",
   passengers: 1,
-  selectedRoute: null,
+  selectedTrip: null,
   selectedSeats: [],
   paymentMethod: null,
   confirmedTrip: null,
@@ -65,7 +53,7 @@ const initialState = {
 
 export const useBookingStore = create<BookingState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       ...initialState,
 
       hasHydrated: false,
@@ -77,44 +65,47 @@ export const useBookingStore = create<BookingState>()(
           destination,
           date,
           passengers,
-          selectedRoute: null,
+          selectedTrip: null,
           selectedSeats: [],
           paymentMethod: null,
           confirmedTrip: null,
         }),
 
-      setSelectedRoute: (route) =>
+      setSelectedTrip: (trip) =>
         set({
-          selectedRoute: route,
+          selectedTrip: trip,
           selectedSeats: [],
           paymentMethod: null,
           confirmedTrip: null,
         }),
 
-      toggleSeat: (seat) =>
-        set((state) => {
-          const alreadySelected = state.selectedSeats.includes(seat);
+      setSelectedSeats: (seats) => set({ selectedSeats: seats }),
 
-          if (alreadySelected) {
-            return {
-              selectedSeats: state.selectedSeats.filter((s) => s !== seat),
-            };
-          }
+      toggleSeat: (seat) => {
+        const { selectedSeats, passengers } = get();
+        const normalizedSeat = seat.trim().toUpperCase();
 
-          if (state.selectedSeats.length >= state.passengers) {
-            return state;
-          }
+        if (selectedSeats.includes(normalizedSeat)) {
+          set({
+            selectedSeats: selectedSeats.filter((item) => item !== normalizedSeat),
+          });
+          return;
+        }
 
-          return {
-            selectedSeats: [...state.selectedSeats, seat],
-          };
-        }),
+        if (selectedSeats.length >= passengers) {
+          return;
+        }
+
+        set({
+          selectedSeats: [...selectedSeats, normalizedSeat],
+        });
+      },
+
+      clearSeats: () => set({ selectedSeats: [] }),
 
       setPaymentMethod: (method) => set({ paymentMethod: method }),
 
       confirmTrip: (trip) => set({ confirmedTrip: trip }),
-
-      clearSeats: () => set({ selectedSeats: [] }),
 
       resetBooking: () =>
         set({
@@ -129,7 +120,7 @@ export const useBookingStore = create<BookingState>()(
         destination: state.destination,
         date: state.date,
         passengers: state.passengers,
-        selectedRoute: state.selectedRoute,
+        selectedTrip: state.selectedTrip,
         selectedSeats: state.selectedSeats,
         paymentMethod: state.paymentMethod,
         confirmedTrip: state.confirmedTrip,

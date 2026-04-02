@@ -1,6 +1,8 @@
-import React, { useState } from "react";
+import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
+import React, { useState } from "react";
 import {
+  Alert,
   SafeAreaView,
   ScrollView,
   StyleSheet,
@@ -9,7 +11,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+
 import { useBookingStore } from "@/src/store/useBookingStore";
 
 export default function HomeScreen() {
@@ -17,7 +19,7 @@ export default function HomeScreen() {
 
   const [origin, setOrigin] = useState("Tegucigalpa");
   const [destination, setDestination] = useState("San Pedro Sula");
-  const [date, setDate] = useState("15 Oct 2026");
+  const [date, setDate] = useState("2026-10-15");
   const [passengers, setPassengers] = useState("1");
 
   const handleSwapLocations = () => {
@@ -27,7 +29,12 @@ export default function HomeScreen() {
   };
 
   const handleSearch = () => {
-    const parsedPassengers = Number(passengers) || 1;
+    const parsedPassengers = Math.max(1, Number(passengers) || 1);
+
+    if (!origin.trim() || !destination.trim() || !date.trim()) {
+      Alert.alert("Campos requeridos", "Completa origen, destino y fecha.");
+      return;
+    }
 
     setSearchData({
       origin: origin.trim(),
@@ -51,7 +58,7 @@ export default function HomeScreen() {
             <Text style={styles.subtitle}>Encuentra tu próximo destino</Text>
           </View>
 
-          <TouchableOpacity style={styles.profileButton}>
+          <TouchableOpacity style={styles.profileButton} activeOpacity={0.85}>
             <Ionicons name="person-outline" size={22} color="#2F49E3" />
           </TouchableOpacity>
         </View>
@@ -102,11 +109,18 @@ export default function HomeScreen() {
               <TextInput
                 value={date}
                 onChangeText={setDate}
-                placeholder="Ej. 15 Oct 2026"
+                placeholder="YYYY-MM-DD"
                 placeholderTextColor="#9CA3AF"
                 style={styles.input}
+                autoCapitalize="none"
               />
             </View>
+          </View>
+
+          <View style={styles.helperBox}>
+            <Text style={styles.helperText}>
+              Usa formato YYYY-MM-DD, por ejemplo 2026-10-15
+            </Text>
           </View>
 
           <View style={styles.field}>
@@ -135,20 +149,12 @@ export default function HomeScreen() {
 
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Rutas populares</Text>
-            <TouchableOpacity>
-              <Text style={styles.sectionLink}>Ver todo</Text>
-            </TouchableOpacity>
+            <Text style={styles.sectionTitle}>Ejemplos para probar</Text>
           </View>
 
           <View style={styles.popularCard}>
             <Text style={styles.popularRoute}>Tegucigalpa → San Pedro Sula</Text>
-            <Text style={styles.popularMeta}>Viajes diarios desde L. 150</Text>
-          </View>
-
-          <View style={styles.popularCard}>
-            <Text style={styles.popularRoute}>Tegucigalpa → La Ceiba</Text>
-            <Text style={styles.popularMeta}>Salidas matutinas y nocturnas</Text>
+            <Text style={styles.popularMeta}>Fecha de prueba: 2026-10-15</Text>
           </View>
         </View>
       </ScrollView>
@@ -214,92 +220,83 @@ const styles = StyleSheet.create({
   field: {
     flexDirection: "row",
     alignItems: "center",
-    borderWidth: 1,
-    borderColor: "#E5E7EB",
-    borderRadius: 18,
+    backgroundColor: "#F7F9FF",
+    borderRadius: 20,
     paddingHorizontal: 14,
     paddingVertical: 12,
-    backgroundColor: "#FAFBFF",
-    marginBottom: 14,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
   },
   fieldTextContainer: {
     flex: 1,
     marginLeft: 12,
   },
   label: {
-    fontSize: 13,
-    color: "#9CA3AF",
-    marginBottom: 2,
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#6B7280",
+    marginBottom: 4,
   },
   input: {
-    fontSize: 18,
-    fontWeight: "700",
+    fontSize: 15,
     color: "#111827",
+    fontWeight: "600",
     paddingVertical: 0,
   },
   swapButton: {
     alignSelf: "center",
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: "#F3F6FF",
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "#EEF2FF",
     alignItems: "center",
     justifyContent: "center",
-    marginBottom: 14,
+    marginBottom: 12,
+  },
+  helperBox: {
+    marginTop: -4,
+    marginBottom: 12,
+    paddingHorizontal: 4,
+  },
+  helperText: {
+    fontSize: 12,
+    color: "#6B7280",
   },
   searchButton: {
-    marginTop: 4,
+    marginTop: 6,
     backgroundColor: "#2F49E3",
     borderRadius: 18,
+    paddingVertical: 15,
     alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 16,
-    shadowColor: "#2F49E3",
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 4,
   },
   searchButtonText: {
     color: "#FFFFFF",
-    fontSize: 20,
+    fontSize: 16,
     fontWeight: "800",
   },
   section: {
-    marginTop: 26,
+    marginTop: 22,
   },
   sectionHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 14,
+    marginBottom: 12,
   },
   sectionTitle: {
     fontSize: 18,
     fontWeight: "800",
     color: "#111827",
   },
-  sectionLink: {
-    fontSize: 16,
-    fontWeight: "700",
-    color: "#2F49E3",
-  },
   popularCard: {
     backgroundColor: "#FFFFFF",
     borderRadius: 20,
     padding: 16,
     marginBottom: 12,
-    shadowColor: "#000",
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 3 },
-    elevation: 2,
   },
   popularRoute: {
-    fontSize: 17,
+    fontSize: 16,
     fontWeight: "800",
     color: "#111827",
-    marginBottom: 4,
+    marginBottom: 6,
   },
   popularMeta: {
     fontSize: 14,
