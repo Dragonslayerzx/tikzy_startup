@@ -43,3 +43,10 @@ class Company(Base):
         cascade="all, delete-orphan",
         passive_deletes=True,
     )
+
+    scheduled_trips = relationship(
+        "ScheduledTrip",
+        back_populates="company",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
