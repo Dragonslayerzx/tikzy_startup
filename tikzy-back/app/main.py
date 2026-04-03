@@ -12,6 +12,7 @@ from app.api.routes.routes import router as routes_router
 from app.api.routes.scheduled_trips import router as scheduled_trips_router
 from app.api.routes.bookings import router as bookings_router
 from app.api.routes.vehicle_seats import router as vehicle_seats_router
+from app.api.routes.auth import router as auth_router
 
 from app.models import (
     booking,
@@ -20,6 +21,7 @@ from app.models import (
     operator,
     route,
     scheduled_trip,
+    user,
     vehicle,
     vehicle_location,
     vehicle_seat,
@@ -59,6 +61,7 @@ def root():
 
 
 app.include_router(health_router)
+app.include_router(auth_router)
 app.include_router(companies_router)
 app.include_router(operators_router)
 app.include_router(vehicles_router)
