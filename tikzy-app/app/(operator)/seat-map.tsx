@@ -47,7 +47,10 @@ export default function SeatMapScreen() {
   };
 
   const handleConfirmSeat = () => {
-    router.back();
+    router.push({
+      pathname: "/(operator)/manual-sale",
+      params: { seat: selected },
+    });
   };
 
   return (
