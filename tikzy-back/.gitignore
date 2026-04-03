@@ -49,6 +49,7 @@ alembic/__pycache__/
 
 # SQLite
 *.sqlite3
+*.db
 
 # Uvicorn / runtime leftovers
 *.pid
