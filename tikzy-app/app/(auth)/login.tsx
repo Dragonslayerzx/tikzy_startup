@@ -46,6 +46,16 @@ export default function LoginScreen() {
               onPress={() => router.replace("/(tabs)/home")}
             />
 
+            <TouchableOpacity
+              style={styles.operatorLink}
+              onPress={() => router.replace("/(operator)/panel")}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.operatorLinkText}>
+                Ingresar como Operador
+              </Text>
+            </TouchableOpacity>
+
             <View style={styles.dividerRow}>
               <View style={styles.divider} />
               <Text style={styles.dividerText}>o continuar con</Text>
@@ -201,5 +211,16 @@ const styles = StyleSheet.create({
     color: colors.primary,
     fontSize: 15,
     fontWeight: "700",
+  },
+  operatorLink: {
+    marginTop: 14,
+    alignItems: "center",
+    paddingVertical: 10,
+  },
+  operatorLinkText: {
+    color: colors.primary,
+    fontSize: 15,
+    fontWeight: "700",
+    textDecorationLine: "underline",
   },
 });
