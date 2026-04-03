@@ -7,11 +7,23 @@ from app.api.routes.health import router as health_router
 from app.api.routes.companies import router as companies_router
 from app.api.routes.operators import router as operators_router
 from app.api.routes.vehicles import router as vehicles_router
-from app.api.routes.trips import router as trips_router
 from app.api.routes.locations import router as locations_router
+from app.api.routes.routes import router as routes_router
+from app.api.routes.scheduled_trips import router as scheduled_trips_router
+from app.api.routes.bookings import router as bookings_router
+from app.api.routes.vehicle_seats import router as vehicle_seats_router
 
-# Import all models so SQLAlchemy registers every table
-from app.models import company, operator, vehicle, trip, vehicle_location  # noqa: F401
+from app.models import (
+    booking,
+    booking_seat,
+    company,
+    operator,
+    route,
+    scheduled_trip,
+    vehicle,
+    vehicle_location,
+    vehicle_seat,
+)  # noqa: F401
 
 Base.metadata.create_all(bind=engine)
 
@@ -50,5 +62,8 @@ app.include_router(health_router)
 app.include_router(companies_router)
 app.include_router(operators_router)
 app.include_router(vehicles_router)
-app.include_router(trips_router)
+app.include_router(routes_router)
+app.include_router(scheduled_trips_router)
+app.include_router(bookings_router)
+app.include_router(vehicle_seats_router)
 app.include_router(locations_router)

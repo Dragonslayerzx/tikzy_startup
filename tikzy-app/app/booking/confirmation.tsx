@@ -1,5 +1,6 @@
-import React, { useEffect } from "react";
+import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
+import React, { useEffect } from "react";
 import {
   SafeAreaView,
   ScrollView,
@@ -8,7 +9,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+
 import { useBookingStore } from "@/src/store/useBookingStore";
 
 export default function ConfirmationScreen() {
@@ -50,7 +51,7 @@ export default function ConfirmationScreen() {
               <Ionicons name="checkmark" size={34} color="#FFFFFF" />
             </View>
 
-            <Text style={styles.successTitle}>¡Pago realizado con éxito!</Text>
+            <Text style={styles.successTitle}>¡Reserva confirmada!</Text>
             <Text style={styles.successSubtitle}>
               Tu boleto ya fue reservado y está listo para tu viaje.
             </Text>
@@ -107,7 +108,9 @@ export default function ConfirmationScreen() {
 
               <View style={styles.infoItem}>
                 <Text style={styles.infoLabel}>Total pagado</Text>
-                <Text style={styles.infoValue}>L. {confirmedTrip.totalPaid}</Text>
+                <Text style={styles.infoValue}>
+                  L. {confirmedTrip.totalPaid.toFixed(2)}
+                </Text>
               </View>
             </View>
 
@@ -262,7 +265,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   routeCity: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: "800",
     color: "#101828",
     marginBottom: 4,
@@ -273,71 +276,70 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
   routeCenter: {
+    width: 84,
     alignItems: "center",
-    justifyContent: "center",
-    minWidth: 90,
   },
   routeArrow: {
-    fontSize: 28,
-    fontWeight: "800",
+    fontSize: 22,
     color: "#2F49E3",
-    marginBottom: 4,
+    fontWeight: "900",
   },
   routeDate: {
+    marginTop: 4,
     fontSize: 12,
-    fontWeight: "700",
     color: "#667085",
+    fontWeight: "700",
     textAlign: "center",
   },
   dashedDivider: {
+    borderBottomWidth: 1,
     borderStyle: "dashed",
-    borderWidth: 1,
-    borderColor: "#E4E7EC",
+    borderColor: "#E5E7EB",
     marginBottom: 18,
   },
   infoGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    rowGap: 16,
+    gap: 12,
+    marginBottom: 18,
   },
   infoItem: {
-    width: "50%",
-    paddingRight: 8,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
   },
   infoLabel: {
-    fontSize: 12,
-    color: "#98A2B3",
+    flex: 1,
+    fontSize: 13,
+    color: "#667085",
     fontWeight: "700",
-    marginBottom: 4,
   },
   infoValue: {
-    fontSize: 14,
+    flex: 1,
+    fontSize: 13,
     color: "#101828",
     fontWeight: "800",
-    lineHeight: 20,
+    textAlign: "right",
   },
   qrSection: {
     alignItems: "center",
   },
   qrBox: {
-    width: 150,
-    height: 150,
+    width: 170,
+    height: 170,
     borderRadius: 18,
-    backgroundColor: "#F8FAFC",
-    borderWidth: 1,
-    borderColor: "#E5E7EB",
+    backgroundColor: "#F8FAFF",
     alignItems: "center",
     justifyContent: "center",
     marginBottom: 12,
   },
   qrCodeText: {
     fontSize: 13,
+    color: "#101828",
     fontWeight: "800",
-    color: "#344054",
     marginBottom: 6,
   },
   qrHint: {
-    fontSize: 13,
+    fontSize: 12,
     color: "#667085",
     textAlign: "center",
   },
@@ -345,20 +347,13 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
     borderRadius: 20,
     padding: 16,
-    marginBottom: 14,
-    shadowColor: "#000",
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 3 },
-    elevation: 2,
   },
   referenceRow: {
     flexDirection: "row",
     alignItems: "center",
   },
   referenceTextWrap: {
-    marginLeft: 10,
-    flex: 1,
+    marginLeft: 12,
   },
   referenceLabel: {
     fontSize: 12,
@@ -367,68 +362,54 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   referenceValue: {
-    fontSize: 14,
+    fontSize: 15,
     color: "#101828",
     fontWeight: "800",
   },
   bottomBar: {
     position: "absolute",
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: "#FFFFFF",
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    paddingHorizontal: 12,
-    paddingTop: 14,
-    paddingBottom: 20,
+    left: 16,
+    right: 16,
+    bottom: 18,
     flexDirection: "row",
-    gap: 8,
-    shadowColor: "#000",
-    shadowOpacity: 0.08,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: -4 },
-    elevation: 10,
+    gap: 10,
   },
   secondaryButton: {
     flex: 1,
+    backgroundColor: "#EEF2FF",
     borderRadius: 16,
     paddingVertical: 14,
     alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#EEF4FF",
   },
   secondaryButtonText: {
-    fontSize: 14,
-    fontWeight: "800",
     color: "#2F49E3",
+    fontSize: 13,
+    fontWeight: "800",
   },
   outlineButton: {
     flex: 1,
+    backgroundColor: "#FFFFFF",
     borderRadius: 16,
     paddingVertical: 14,
     alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#FFFFFF",
-    borderWidth: 1.5,
-    borderColor: "#2F49E3",
+    borderWidth: 1,
+    borderColor: "#D0D5DD",
   },
   outlineButtonText: {
-    fontSize: 14,
+    color: "#344054",
+    fontSize: 13,
     fontWeight: "800",
-    color: "#2F49E3",
   },
   primaryButton: {
     flex: 1,
+    backgroundColor: "#2F49E3",
     borderRadius: 16,
     paddingVertical: 14,
     alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#2F49E3",
   },
   primaryButtonText: {
-    fontSize: 14,
-    fontWeight: "800",
     color: "#FFFFFF",
+    fontSize: 13,
+    fontWeight: "800",
   },
 });

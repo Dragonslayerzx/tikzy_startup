@@ -37,3 +37,4 @@ class Operator(Base):
 
     company = relationship("Company", back_populates="operators")
     vehicles = relationship("Vehicle", back_populates="operator")
+    scheduled_trips = relationship("ScheduledTrip", back_populates="operator")

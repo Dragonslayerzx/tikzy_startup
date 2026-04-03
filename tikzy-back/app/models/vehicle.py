@@ -48,3 +48,10 @@ class Vehicle(Base):
 
     company = relationship("Company", back_populates="vehicles")
     operator = relationship("Operator", back_populates="vehicles")
+    scheduled_trips = relationship("ScheduledTrip", back_populates="vehicle")
+    seats = relationship(
+        "VehicleSeat",
+        back_populates="vehicle",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
