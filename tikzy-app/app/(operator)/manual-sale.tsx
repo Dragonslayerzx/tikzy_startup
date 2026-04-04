@@ -9,16 +9,22 @@ import {
   View,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 
 const QUICK_SEATS = ["12A", "12B", "13A", "13B"];
 
 export default function ManualSaleScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams();
+  
   const [name, setName] = useState("");
   const [dni, setDni] = useState("");
-  const [quantity, setQuantity] = useState(1);
-  const [selectedSeat, setSelectedSeat] = useState<string | null>(null);
+  // Initialize quantity and selected seats from params if they exist (when coming back from map)
+  const initialSeats = params.seats ? (params.seats as string).split(",") : [];
+  const [quantity, setQuantity] = useState(
+    params.quantity ? parseInt(params.quantity as string, 10) : 1
+  );
+  const [selectedSeats, setSelectedSeats] = useState<string[]>(initialSeats);
 
   const PRICE_PER_TICKET = 350;
   const totalPrice = PRICE_PER_TICKET * quantity;
@@ -141,7 +147,7 @@ export default function ManualSaleScreen() {
           <Text style={styles.fieldLabel}>Asiento</Text>
           <View style={styles.seatsGrid}>
             {QUICK_SEATS.map((seat) => {
-              const isSelected = selectedSeat === seat;
+              const isSelected = selectedSeats.includes(seat);
               return (
                 <TouchableOpacity
                   key={seat}
@@ -149,7 +155,13 @@ export default function ManualSaleScreen() {
                     styles.seatButton,
                     isSelected && styles.seatButtonSelected,
                   ]}
-                  onPress={() => setSelectedSeat(seat)}
+                  onPress={() => {
+                    if (selectedSeats.includes(seat)) {
+                      setSelectedSeats(selectedSeats.filter(s => s !== seat));
+                    } else if (selectedSeats.length < quantity) {
+                      setSelectedSeats([...selectedSeats, seat]);
+                    }
+                  }}
                   activeOpacity={0.8}
                 >
                   <Text
@@ -167,7 +179,7 @@ export default function ManualSaleScreen() {
 
           <TouchableOpacity
             style={styles.viewMapLink}
-            onPress={() => router.push("/(operator)/seat-map")}
+            onPress={() => router.push({ pathname: "/(operator)/seat-map", params: { quantity } })}
             activeOpacity={0.8}
           >
             <Ionicons name="grid-outline" size={18} color="#1F3CCF" />
@@ -196,7 +208,7 @@ export default function ManualSaleScreen() {
             <View style={styles.totalMetaItem}>
               <Ionicons name="ticket-outline" size={16} color="#6B7280" />
               <Text style={styles.totalMetaText}>
-                Ticket: #{selectedSeat ? `MAN-${selectedSeat}` : "---"}
+                Ticket: {selectedSeats.length > 0 ? selectedSeats.map(s => `#MAN-${s}`).join(", ") : "---"}
               </Text>
             </View>
           </View>
@@ -206,11 +218,11 @@ export default function ManualSaleScreen() {
         <TouchableOpacity
           style={[
             styles.confirmButton,
-            (!name || !selectedSeat) && styles.confirmButtonDisabled,
+            (!name || selectedSeats.length === 0) && styles.confirmButtonDisabled,
           ]}
           onPress={handleConfirm}
           activeOpacity={0.9}
-          disabled={!name || !selectedSeat}
+          disabled={!name || selectedSeats.length === 0}
         >
           <Ionicons name="checkmark-circle" size={24} color="#FFFFFF" />
           <Text style={styles.confirmButtonText}>Confirmar Venta</Text>

@@ -27,23 +27,6 @@ export default function ProfileScreen() {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* Header */}
-        <View style={styles.header}>
-          <View style={styles.headerLeft}>
-            <Image
-              source={require("@/assets/images/tikzy_log.png")}
-              style={styles.logoImage}
-              resizeMode="contain"
-            />
-          </View>
-          <TouchableOpacity style={styles.notifButton} activeOpacity={0.8}>
-            <Ionicons
-              name="notifications-outline"
-              size={22}
-              color="#111827"
-            />
-          </TouchableOpacity>
-        </View>
 
         {/* Profile Avatar + Name */}
         <View style={styles.profileSection}>

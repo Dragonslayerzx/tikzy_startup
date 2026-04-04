@@ -8,7 +8,7 @@ import {
   View,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 
 type SeatStatus = "free" | "occupied";
 
@@ -30,8 +30,10 @@ const generateSeats = (): { label: string; status: SeatStatus }[] => {
 
 export default function SeatMapScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams();
+  const maxSeats = params.quantity ? parseInt(params.quantity as string, 10) : 1;
   const [seats, setSeats] = useState(generateSeats);
-  const [selected, setSelected] = useState<string | null>(null);
+  const [selectedSeats, setSelectedSeats] = useState<string[]>([]);
 
   const occupiedCount = seats.filter(
     (s) => s.status === "occupied"
@@ -39,17 +41,17 @@ export default function SeatMapScreen() {
 
   const handleSeatPress = (label: string, status: SeatStatus) => {
     if (status === "occupied") return;
-    if (selected === label) {
-      setSelected(null);
-    } else {
-      setSelected(label);
+    if (selectedSeats.includes(label)) {
+      setSelectedSeats(selectedSeats.filter(s => s !== label));
+    } else if (selectedSeats.length < maxSeats) {
+      setSelectedSeats([...selectedSeats, label]);
     }
   };
 
   const handleConfirmSeat = () => {
     router.push({
       pathname: "/(operator)/manual-sale",
-      params: { seat: selected },
+      params: { seats: selectedSeats.join(",") },
     });
   };
 
@@ -59,7 +61,7 @@ export default function SeatMapScreen() {
       <View style={styles.header}>
         <TouchableOpacity
           style={styles.backButton}
-          onPress={() => router.back()}
+          onPress={handleConfirmSeat}
           activeOpacity={0.8}
         >
           <Ionicons name="chevron-back" size={24} color="#111827" />
@@ -127,7 +129,7 @@ export default function SeatMapScreen() {
                     styles.seat,
                     seat.status === "free" && styles.seatFree,
                     seat.status === "occupied" && styles.seatOccupied,
-                    selected === seat.label && styles.seatSelected,
+                    selectedSeats.includes(seat.label) && styles.seatSelected,
                   ]}
                   onPress={() => handleSeatPress(seat.label, seat.status)}
                   activeOpacity={0.8}
@@ -137,7 +139,7 @@ export default function SeatMapScreen() {
                     style={[
                       styles.seatText,
                       seat.status === "occupied" && styles.seatTextOccupied,
-                      selected === seat.label && styles.seatTextHighlight,
+                      selectedSeats.includes(seat.label) && styles.seatTextHighlight,
                     ]}
                   >
                     {seat.label.slice(-2)}
@@ -153,7 +155,7 @@ export default function SeatMapScreen() {
                     styles.seat,
                     seat.status === "free" && styles.seatFree,
                     seat.status === "occupied" && styles.seatOccupied,
-                    selected === seat.label && styles.seatSelected,
+                    selectedSeats.includes(seat.label) && styles.seatSelected,
                   ]}
                   onPress={() => handleSeatPress(seat.label, seat.status)}
                   activeOpacity={0.8}
@@ -163,7 +165,7 @@ export default function SeatMapScreen() {
                     style={[
                       styles.seatText,
                       seat.status === "occupied" && styles.seatTextOccupied,
-                      selected === seat.label && styles.seatTextHighlight,
+                      selectedSeats.includes(seat.label) && styles.seatTextHighlight,
                     ]}
                   >
                     {seat.label.slice(-2)}
@@ -176,16 +178,16 @@ export default function SeatMapScreen() {
       </ScrollView>
 
       {/* Bottom Panel */}
-      {selected && (
+      {selectedSeats.length > 0 && (
         <View style={styles.bottomPanel}>
           <View style={styles.bottomInfo}>
             <View style={styles.bottomInfoRow}>
-              <Text style={styles.bottomLabel}>Asiento</Text>
-              <Text style={styles.bottomValue}>{selected}</Text>
+              <Text style={styles.bottomLabel}>Asientos ({selectedSeats.length}/{maxSeats})</Text>
+              <Text style={styles.bottomValue}>{selectedSeats.join(", ")}</Text>
             </View>
             <View style={styles.bottomInfoRow}>
               <Text style={styles.bottomLabel}>Tarifa</Text>
-              <Text style={styles.bottomValue}>L. 350.00</Text>
+              <Text style={styles.bottomValue}>L. {(350 * selectedSeats.length).toFixed(2)}</Text>
             </View>
           </View>
           <TouchableOpacity
@@ -193,7 +195,7 @@ export default function SeatMapScreen() {
             onPress={handleConfirmSeat}
             activeOpacity={0.9}
           >
-            <Text style={styles.confirmButtonText}>Confirmar Asiento</Text>
+            <Text style={styles.confirmButtonText}>Confirmar Asiento{selectedSeats.length > 1 ? "s" : ""}</Text>
           </TouchableOpacity>
         </View>
       )}

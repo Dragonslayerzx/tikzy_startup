@@ -35,10 +35,7 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="search"
         options={{
-          title: "Buscar",
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="search-outline" size={size} color={color} />
-          ),
+          href: null,
         }}
       />
 
@@ -55,10 +52,7 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="alerts"
         options={{
-          title: "Alertas",
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="notifications-outline" size={size} color={color} />
-          ),
+          href: null,
         }}
       />
 
