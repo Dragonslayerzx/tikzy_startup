@@ -1,10 +1,7 @@
-import Button from "@/src/components/ui/Button";
-import Input from "@/src/components/ui/Input";
-import Screen from "@/src/components/ui/Screen";
-import { images } from "@/constants/images"; // or "@/src/constants/images" if that's your real path
-import { colors } from "@/src/theme/colors";
 import { Link, useRouter } from "expo-router";
+import { useState } from "react";
 import {
+  Alert,
   Image,
   StyleSheet,
   Text,
@@ -12,19 +9,54 @@ import {
   View,
 } from "react-native";
 
+import { images } from "@/constants/images";
+import Button from "@/src/components/ui/Button";
+import Input from "@/src/components/ui/Input";
+import Screen from "@/src/components/ui/Screen";
+import { useAuthStore } from "@/src/store/auth.store";
+import { colors } from "@/src/theme/colors";
+
 export default function LoginScreen() {
   const router = useRouter();
+  const login = useAuthStore((state) => state.login);
+  const isLoading = useAuthStore((state) => state.isLoading);
+
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+
+  async function handleLogin() {
+    if (!email.trim() || !password.trim()) {
+      Alert.alert("Faltan datos", "Completa correo y contraseña.");
+      return;
+    }
+
+    try {
+      await login({
+        email: email.trim().toLowerCase(),
+        password,
+      });
+
+      const user = useAuthStore.getState().user;
+
+      if (user?.is_operator) {
+        router.replace("/(operator)/panel");
+      } else {
+        router.replace("/(tabs)/home");
+      }
+    } catch (error) {
+      Alert.alert(
+        "No se pudo iniciar sesión",
+        error instanceof Error ? error.message : "Revisa tus credenciales."
+      );
+    }
+  }
 
   return (
     <Screen>
       <View style={styles.outer}>
         <View style={styles.phoneFrame}>
           <View style={styles.topSection}>
-            <Image
-              source={images.logo}
-              style={styles.logo}
-              resizeMode="contain"
-            />
+            <Image source={images.logo} style={styles.logo} resizeMode="contain" />
             <Text style={styles.tagline}>Viaja inteligente, viaja Tikzy</Text>
           </View>
 
@@ -32,10 +64,24 @@ export default function LoginScreen() {
             <Text style={styles.title}>Bienvenido de nuevo</Text>
 
             <Text style={styles.label}>Correo electrónico</Text>
-            <Input placeholder="ejemplo@correo.com" />
+            <Input
+              placeholder="ejemplo@correo.com"
+              value={email}
+              onChangeText={setEmail}
+              keyboardType="email-address"
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
 
             <Text style={[styles.label, styles.labelSpacing]}>Contraseña</Text>
-            <Input placeholder="••••••••" secureTextEntry />
+            <Input
+              placeholder="••••••••"
+              secureTextEntry
+              value={password}
+              onChangeText={setPassword}
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
 
             <TouchableOpacity activeOpacity={0.8}>
               <Text style={styles.forgot}>¿Olvidé mi contraseña?</Text>
@@ -43,18 +89,10 @@ export default function LoginScreen() {
 
             <Button
               title="Iniciar sesión"
-              onPress={() => router.replace("/(tabs)/home")}
+              onPress={handleLogin}
+              loading={isLoading}
+              disabled={!email.trim() || !password.trim()}
             />
-
-            <TouchableOpacity
-              style={styles.operatorLink}
-              onPress={() => router.replace("/(operator)/panel")}
-              activeOpacity={0.8}
-            >
-              <Text style={styles.operatorLinkText}>
-                Ingresar como Operador
-              </Text>
-            </TouchableOpacity>
 
             <View style={styles.dividerRow}>
               <View style={styles.divider} />
@@ -211,16 +249,5 @@ const styles = StyleSheet.create({
     color: colors.primary,
     fontSize: 15,
     fontWeight: "700",
-  },
-  operatorLink: {
-    marginTop: 14,
-    alignItems: "center",
-    paddingVertical: 10,
-  },
-  operatorLinkText: {
-    color: colors.primary,
-    fontSize: 15,
-    fontWeight: "700",
-    textDecorationLine: "underline",
   },
 });

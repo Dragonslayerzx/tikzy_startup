@@ -86,3 +86,10 @@ class ScheduledTrip(Base):
         cascade="all, delete-orphan",
         passive_deletes=True,
     )
+
+    trip_sessions = relationship(
+        "TripSession",
+        back_populates="scheduled_trip",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )

@@ -1,7 +1,5 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useState } from "react";
 import {
-  ActivityIndicator,
-  Alert,
   SafeAreaView,
   ScrollView,
   StyleSheet,
@@ -10,70 +8,48 @@ import {
   View,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { useLocalSearchParams, useRouter } from "expo-router";
+import { useRouter } from "expo-router";
 
-import { apiFetch } from "@/src/services/api";
-import type { SeatMapItem } from "@/src/types/tikzy";
+type SeatStatus = "free" | "occupied";
+
+const generateSeats = (): { label: string; status: SeatStatus }[] => {
+  const seats: { label: string; status: SeatStatus }[] = [];
+  const occupiedSeats = ["01A", "01B", "01C", "01D", "02A", "02B", "02C", "02D", "03C", "03D", "04A", "04B", "05A", "05B", "05D", "06B", "06C", "07A", "07B", "08A", "08C", "09A", "09D", "10A", "10B", "11C", "11D"];
+
+  for (let row = 1; row <= 15; row++) {
+    const cols = ["A", "B", "C", "D"];
+    cols.forEach((col) => {
+      const label = `${String(row).padStart(2, "0")}${col}`;
+      let status: SeatStatus = "free";
+      if (occupiedSeats.includes(label)) status = "occupied";
+      seats.push({ label, status });
+    });
+  }
+  return seats;
+};
 
 export default function SeatMapScreen() {
   const router = useRouter();
-  const params = useLocalSearchParams();
-  const maxSeats = params.quantity ? parseInt(params.quantity as string, 10) : 1;
-  const tripId = params.tripId ? Number(params.tripId) : 1; // Default to 1 if no trip specified
-  
-  const [seatMap, setSeatMap] = useState<SeatMapItem[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [selectedSeats, setSelectedSeats] = useState<string[]>([]);
+  const [seats, setSeats] = useState(generateSeats);
+  const [selected, setSelected] = useState<string | null>(null);
 
-  useEffect(() => {
-    const loadSeatMap = async () => {
-      try {
-        setLoading(true);
-        const data = await apiFetch<SeatMapItem[]>(
-          `/vehicle-seats/scheduled-trip/${tripId}/map`
-        );
-        setSeatMap(data);
-      } catch (error) {
-        console.error("Error loading seat map:", error);
-        Alert.alert("Error", "No se pudo cargar el mapa de asientos.");
-      } finally {
-        setLoading(false);
-      }
-    };
+  const occupiedCount = seats.filter(
+    (s) => s.status === "occupied"
+  ).length;
 
-    loadSeatMap();
-  }, [tripId]);
-
-  const groupedRows = useMemo(() => {
-    const rows = new Map<number, SeatMapItem[]>();
-
-    seatMap.forEach((seat) => {
-      const currentRow = rows.get(seat.row_number) || [];
-      currentRow.push(seat);
-      currentRow.sort((a, b) => a.column_label.localeCompare(b.column_label));
-      rows.set(seat.row_number, currentRow);
-    });
-
-    return Array.from(rows.entries()).sort((a, b) => a[0] - b[0]);
-  }, [seatMap]);
-
-  const occupiedCount = seatMap.filter((s) => s.is_occupied).length;
-  const totalCount = seatMap.filter((s) => s.is_active).length;
-
-  const handleSeatPress = (seat: SeatMapItem) => {
-    if (seat.is_occupied || !seat.is_active) return;
-    const label = seat.seat_number;
-    if (selectedSeats.includes(label)) {
-      setSelectedSeats(selectedSeats.filter(s => s !== label));
-    } else if (selectedSeats.length < maxSeats) {
-      setSelectedSeats([...selectedSeats, label]);
+  const handleSeatPress = (label: string, status: SeatStatus) => {
+    if (status === "occupied") return;
+    if (selected === label) {
+      setSelected(null);
+    } else {
+      setSelected(label);
     }
   };
 
   const handleConfirmSeat = () => {
     router.push({
       pathname: "/(operator)/manual-sale",
-      params: { seats: selectedSeats.join(",") },
+      params: { seat: selected },
     });
   };
 
@@ -83,7 +59,7 @@ export default function SeatMapScreen() {
       <View style={styles.header}>
         <TouchableOpacity
           style={styles.backButton}
-          onPress={handleConfirmSeat}
+          onPress={() => router.back()}
           activeOpacity={0.8}
         >
           <Ionicons name="chevron-back" size={24} color="#111827" />
@@ -91,7 +67,7 @@ export default function SeatMapScreen() {
         <View style={styles.headerCenter}>
           <Text style={styles.headerTitle}>TGU → SPS</Text>
           <Text style={styles.headerSubtitle}>
-            {occupiedCount}/{totalCount || 60} ocupados
+            {occupiedCount}/60 ocupados
           </Text>
         </View>
         <View style={{ width: 44 }} />
@@ -133,109 +109,83 @@ export default function SeatMapScreen() {
           <Text style={styles.colHeader}>D</Text>
         </View>
 
-        {/* Loading Indicator */}
-        {loading ? (
-          <View style={{ paddingVertical: 40, alignItems: "center" }}>
-            <ActivityIndicator size="large" color="#1F3CCF" />
-            <Text style={{ marginTop: 12, color: "#6B7280" }}>Cargando asientos...</Text>
-          </View>
-        ) : (
-          <>
-            {/* Rows */}
-            {groupedRows.map(([rowNumber, rowSeats]) => {
-              const leftSeats = rowSeats.filter((seat) =>
-                ["A", "B"].includes(seat.column_label.toUpperCase())
-              );
-              const rightSeats = rowSeats.filter((seat) =>
-                !["A", "B"].includes(seat.column_label.toUpperCase())
-              );
-
-              return (
-                <View key={`row-${rowNumber}`} style={styles.row}>
-                  <Text style={styles.rowLabel}>
-                    {String(rowNumber).padStart(2, "0")}
+        {/* Rows */}
+        {Array.from({ length: 15 }, (_, rowIndex) => {
+          const rowNum = rowIndex + 1;
+          const rowSeats = seats.filter((s) =>
+            s.label.startsWith(String(rowNum).padStart(2, "0"))
+          );
+          return (
+            <View key={rowNum} style={styles.row}>
+              <Text style={styles.rowLabel}>
+                {String(rowNum).padStart(2, "0")}
+              </Text>
+              {rowSeats.slice(0, 2).map((seat) => (
+                <TouchableOpacity
+                  key={seat.label}
+                  style={[
+                    styles.seat,
+                    seat.status === "free" && styles.seatFree,
+                    seat.status === "occupied" && styles.seatOccupied,
+                    selected === seat.label && styles.seatSelected,
+                  ]}
+                  onPress={() => handleSeatPress(seat.label, seat.status)}
+                  activeOpacity={0.8}
+                  disabled={seat.status === "occupied"}
+                >
+                  <Text
+                    style={[
+                      styles.seatText,
+                      seat.status === "occupied" && styles.seatTextOccupied,
+                      selected === seat.label && styles.seatTextHighlight,
+                    ]}
+                  >
+                    {seat.label.slice(-2)}
                   </Text>
-                  
-                  {leftSeats.map((seat) => {
-                    const isSelected = selectedSeats.includes(seat.seat_number);
-                    const isDisabled = seat.is_occupied || !seat.is_active;
-
-                    return (
-                      <TouchableOpacity
-                        key={seat.vehicle_seat_id}
-                        style={[
-                          styles.seat,
-                          !isDisabled && !isSelected && styles.seatFree,
-                          isDisabled && styles.seatOccupied,
-                          isSelected && styles.seatSelected,
-                        ]}
-                        onPress={() => handleSeatPress(seat)}
-                        activeOpacity={0.8}
-                        disabled={isDisabled}
-                      >
-                        <Text
-                          style={[
-                            styles.seatText,
-                            isDisabled && styles.seatTextOccupied,
-                            isSelected && styles.seatTextHighlight,
-                          ]}
-                        >
-                          {seat.seat_number.slice(-2)}
-                        </Text>
-                      </TouchableOpacity>
-                    );
-                  })}
-                  
-                  {/* Aisle */}
-                  <View style={styles.aisle} />
-                  
-                  {rightSeats.map((seat) => {
-                    const isSelected = selectedSeats.includes(seat.seat_number);
-                    const isDisabled = seat.is_occupied || !seat.is_active;
-
-                    return (
-                      <TouchableOpacity
-                        key={seat.vehicle_seat_id}
-                        style={[
-                          styles.seat,
-                          !isDisabled && !isSelected && styles.seatFree,
-                          isDisabled && styles.seatOccupied,
-                          isSelected && styles.seatSelected,
-                        ]}
-                        onPress={() => handleSeatPress(seat)}
-                        activeOpacity={0.8}
-                        disabled={isDisabled}
-                      >
-                        <Text
-                          style={[
-                            styles.seatText,
-                            isDisabled && styles.seatTextOccupied,
-                            isSelected && styles.seatTextHighlight,
-                          ]}
-                        >
-                          {seat.seat_number.slice(-2)}
-                        </Text>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </View>
-              );
-            })}
-          </>
-        )}
+                </TouchableOpacity>
+              ))}
+              {/* Aisle */}
+              <View style={styles.aisle} />
+              {rowSeats.slice(2, 4).map((seat) => (
+                <TouchableOpacity
+                  key={seat.label}
+                  style={[
+                    styles.seat,
+                    seat.status === "free" && styles.seatFree,
+                    seat.status === "occupied" && styles.seatOccupied,
+                    selected === seat.label && styles.seatSelected,
+                  ]}
+                  onPress={() => handleSeatPress(seat.label, seat.status)}
+                  activeOpacity={0.8}
+                  disabled={seat.status === "occupied"}
+                >
+                  <Text
+                    style={[
+                      styles.seatText,
+                      seat.status === "occupied" && styles.seatTextOccupied,
+                      selected === seat.label && styles.seatTextHighlight,
+                    ]}
+                  >
+                    {seat.label.slice(-2)}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          );
+        })}
       </ScrollView>
 
       {/* Bottom Panel */}
-      {selectedSeats.length > 0 && (
+      {selected && (
         <View style={styles.bottomPanel}>
           <View style={styles.bottomInfo}>
             <View style={styles.bottomInfoRow}>
-              <Text style={styles.bottomLabel}>Asientos ({selectedSeats.length}/{maxSeats})</Text>
-              <Text style={styles.bottomValue}>{selectedSeats.join(", ")}</Text>
+              <Text style={styles.bottomLabel}>Asiento</Text>
+              <Text style={styles.bottomValue}>{selected}</Text>
             </View>
             <View style={styles.bottomInfoRow}>
               <Text style={styles.bottomLabel}>Tarifa</Text>
-              <Text style={styles.bottomValue}>L. {(350 * selectedSeats.length).toFixed(2)}</Text>
+              <Text style={styles.bottomValue}>L. 350.00</Text>
             </View>
           </View>
           <TouchableOpacity
@@ -243,7 +193,7 @@ export default function SeatMapScreen() {
             onPress={handleConfirmSeat}
             activeOpacity={0.9}
           >
-            <Text style={styles.confirmButtonText}>Confirmar Asiento{selectedSeats.length > 1 ? "s" : ""}</Text>
+            <Text style={styles.confirmButtonText}>Confirmar Asiento</Text>
           </TouchableOpacity>
         </View>
       )}

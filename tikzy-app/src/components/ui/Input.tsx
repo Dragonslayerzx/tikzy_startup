@@ -1,12 +1,11 @@
 import { colors } from "@/src/theme/colors";
-import { StyleSheet, TextInput, View } from "react-native";
+import { StyleSheet, TextInput, TextInputProps, View } from "react-native";
 
-type Props = {
+type Props = TextInputProps & {
   placeholder: string;
-  secureTextEntry?: boolean;
 };
 
-export default function Input({ placeholder, secureTextEntry = false }: Props) {
+export default function Input({ placeholder, secureTextEntry = false, ...rest }: Props) {
   return (
     <View style={styles.wrapper}>
       <TextInput
@@ -14,6 +13,8 @@ export default function Input({ placeholder, secureTextEntry = false }: Props) {
         placeholderTextColor={colors.muted}
         secureTextEntry={secureTextEntry}
         style={styles.input}
+        autoCapitalize="none"
+        {...rest}
       />
     </View>
   );

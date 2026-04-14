@@ -1,8 +1,28 @@
-import { Tabs } from "expo-router";
-import { Ionicons } from "@expo/vector-icons";
+import { useAuthStore } from "@/src/store/auth.store";
 import { colors } from "@/src/theme/colors";
+import { Ionicons } from "@expo/vector-icons";
+import { Redirect, Tabs } from "expo-router";
+import { ActivityIndicator, View } from "react-native";
 
 export default function TabsLayout() {
+  const { isHydrated, token, user } = useAuthStore();
+
+  if (!isHydrated) {
+    return (
+      <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
+        <ActivityIndicator />
+      </View>
+    );
+  }
+
+  if (!token || !user) {
+    return <Redirect href="/login" />;
+  }
+
+  if (user.is_operator) {
+    return <Redirect href="/(operator)/panel" />;
+  }
+
   return (
     <Tabs
       screenOptions={{
@@ -35,7 +55,10 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="search"
         options={{
-          href: null,
+          title: "Buscar",
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="search-outline" size={size} color={color} />
+          ),
         }}
       />
 
@@ -52,7 +75,10 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="alerts"
         options={{
-          href: null,
+          title: "Alertas",
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="notifications-outline" size={size} color={color} />
+          ),
         }}
       />
 

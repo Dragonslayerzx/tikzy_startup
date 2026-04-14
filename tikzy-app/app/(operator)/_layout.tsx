@@ -1,8 +1,27 @@
-import { Tabs } from "expo-router";
+import { useAuthStore } from "@/src/store/auth.store";
 import { Ionicons } from "@expo/vector-icons";
-import { View, StyleSheet } from "react-native";
+import { Redirect, Tabs } from "expo-router";
+import { ActivityIndicator, StyleSheet, View } from "react-native";
 
 export default function OperatorTabsLayout() {
+  const { isHydrated, token, user } = useAuthStore();
+
+  if (!isHydrated) {
+    return (
+      <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
+        <ActivityIndicator />
+      </View>
+    );
+  }
+
+  if (!token || !user) {
+    return <Redirect href="/login" />;
+  }
+
+  if (!user.is_operator) {
+    return <Redirect href="/(tabs)/home" />;
+  }
+
   return (
     <Tabs
       screenOptions={{
@@ -89,37 +108,11 @@ export default function OperatorTabsLayout() {
         }}
       />
 
-      {/* Hidden from tabs but accessible via navigation */}
-      <Tabs.Screen
-        name="route-dashboard"
-        options={{
-          href: null,
-        }}
-      />
-      <Tabs.Screen
-        name="ticket-validation"
-        options={{
-          href: null,
-        }}
-      />
-      <Tabs.Screen
-        name="manual-sale"
-        options={{
-          href: null,
-        }}
-      />
-      <Tabs.Screen
-        name="seat-map"
-        options={{
-          href: null,
-        }}
-      />
-      <Tabs.Screen
-        name="settlement"
-        options={{
-          href: null,
-        }}
-      />
+      <Tabs.Screen name="route-dashboard" options={{ href: null }} />
+      <Tabs.Screen name="ticket-validation" options={{ href: null }} />
+      <Tabs.Screen name="manual-sale" options={{ href: null }} />
+      <Tabs.Screen name="seat-map" options={{ href: null }} />
+      <Tabs.Screen name="settlement" options={{ href: null }} />
     </Tabs>
   );
 }

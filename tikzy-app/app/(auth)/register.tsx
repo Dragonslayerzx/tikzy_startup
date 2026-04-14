@@ -1,10 +1,13 @@
+import { images } from "@/constants/images";
 import Button from "@/src/components/ui/Button";
 import Input from "@/src/components/ui/Input";
 import Screen from "@/src/components/ui/Screen";
-import { images } from "@/constants/images";
+import { useAuthStore } from "@/src/store/auth.store";
 import { colors } from "@/src/theme/colors";
-import { Link } from "expo-router";
+import { Link, useRouter } from "expo-router";
+import { useState } from "react";
 import {
+  Alert,
   Image,
   ScrollView,
   StyleSheet,
@@ -14,6 +17,79 @@ import {
 } from "react-native";
 
 export default function RegisterScreen() {
+  const router = useRouter();
+  const register = useAuthStore((state) => state.register);
+  const isLoading = useAuthStore((state) => state.isLoading);
+
+  const [fullName, setFullName] = useState("");
+  const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [acceptedTerms, setAcceptedTerms] = useState(false);
+
+  const isFormValid =
+    fullName.trim().length >= 2 &&
+    email.trim().length > 0 &&
+    password.length >= 6 &&
+    confirmPassword.length >= 6 &&
+    acceptedTerms;
+
+  async function handleRegister() {
+    if (!fullName.trim()) {
+      Alert.alert("Falta información", "Ingresa tu nombre completo.");
+      return;
+    }
+
+    if (!email.trim()) {
+      Alert.alert("Falta información", "Ingresa tu correo electrónico.");
+      return;
+    }
+
+    if (password.length < 6) {
+      Alert.alert(
+        "Contraseña inválida",
+        "La contraseña debe tener al menos 6 caracteres."
+      );
+      return;
+    }
+
+    if (password !== confirmPassword) {
+      Alert.alert("Contraseñas", "Las contraseñas no coinciden.");
+      return;
+    }
+
+    if (!acceptedTerms) {
+      Alert.alert(
+        "Términos y condiciones",
+        "Debes aceptar los términos y condiciones."
+      );
+      return;
+    }
+
+    try {
+      await register({
+        full_name: fullName.trim(),
+        email: email.trim().toLowerCase(),
+        phone: phone.trim() ? phone.trim() : undefined,
+        password,
+      });
+
+      const user = useAuthStore.getState().user;
+
+      if (user?.is_operator) {
+        router.replace("/(operator)/panel");
+      } else {
+        router.replace("/(tabs)/home");
+      }
+    } catch (error) {
+      Alert.alert(
+        "No se pudo crear la cuenta",
+        error instanceof Error ? error.message : "Intenta nuevamente."
+      );
+    }
+  }
+
   return (
     <Screen>
       <ScrollView
@@ -34,28 +110,82 @@ export default function RegisterScreen() {
             <Text style={styles.title}>Registro</Text>
 
             <Text style={styles.label}>Nombre completo</Text>
-            <Input placeholder="Juan Pérez" />
+            <Input
+              placeholder="Juan Pérez"
+              value={fullName}
+              onChangeText={setFullName}
+              autoCapitalize="words"
+              autoCorrect={false}
+            />
 
             <Text style={[styles.label, styles.labelSpacing]}>
               Correo electrónico
             </Text>
-            <Input placeholder="ejemplo@correo.com" />
+            <Input
+              placeholder="ejemplo@correo.com"
+              value={email}
+              onChangeText={setEmail}
+              keyboardType="email-address"
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
 
             <Text style={[styles.label, styles.labelSpacing]}>Teléfono</Text>
-            <Input placeholder="+504 9999-9999" />
+            <Input
+              placeholder="+504 9999-9999"
+              value={phone}
+              onChangeText={setPhone}
+              keyboardType="phone-pad"
+              autoCorrect={false}
+            />
 
             <Text style={[styles.label, styles.labelSpacing]}>Contraseña</Text>
-            <Input placeholder="••••••••" secureTextEntry />
+            <Input
+              placeholder="••••••••"
+              secureTextEntry
+              value={password}
+              onChangeText={setPassword}
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
 
-            <View style={styles.termsRow}>
-              <TouchableOpacity style={styles.checkbox} activeOpacity={0.8} />
+            <Text style={[styles.label, styles.labelSpacing]}>
+              Confirmar contraseña
+            </Text>
+            <Input
+              placeholder="••••••••"
+              secureTextEntry
+              value={confirmPassword}
+              onChangeText={setConfirmPassword}
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
+
+            <TouchableOpacity
+              style={styles.termsRow}
+              activeOpacity={0.8}
+              onPress={() => setAcceptedTerms((prev) => !prev)}
+            >
+              <View
+                style={[
+                  styles.checkbox,
+                  acceptedTerms && styles.checkboxChecked,
+                ]}
+              >
+                {acceptedTerms ? <Text style={styles.checkmark}>✓</Text> : null}
+              </View>
+
               <Text style={styles.termsText}>
-                Acepto{" "}
-                <Text style={styles.termsLink}>términos y condiciones</Text>
+                Acepto <Text style={styles.termsLink}>términos y condiciones</Text>
               </Text>
-            </View>
+            </TouchableOpacity>
 
-            <Button title="Crear mi cuenta" />
+            <Button
+              title="Crear mi cuenta"
+              onPress={handleRegister}
+              loading={isLoading}
+              disabled={!isFormValid}
+            />
 
             <View style={styles.bottomRowInside}>
               <Text style={styles.bottomText}>¿Ya tienes cuenta? </Text>
@@ -138,6 +268,17 @@ const styles = StyleSheet.create({
     borderColor: "#D9C7F2",
     marginRight: 10,
     backgroundColor: "#FFFFFF",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  checkboxChecked: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+  },
+  checkmark: {
+    color: "#FFFFFF",
+    fontSize: 14,
+    fontWeight: "800",
   },
   termsText: {
     flex: 1,

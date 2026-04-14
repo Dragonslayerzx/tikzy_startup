@@ -6,13 +6,15 @@ from app.core.config import settings
 engine = create_engine(
     settings.DATABASE_URL,
     echo=True,
-    future=True
+    future=True,
+    pool_pre_ping=True,
+    pool_recycle=300,
 )
 
 SessionLocal = sessionmaker(
     autocommit=False,
     autoflush=False,
-    bind=engine
+    bind=engine,
 )
 
 Base = declarative_base()

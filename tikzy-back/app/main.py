@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.database import Base, engine
 
+from app.api.routes.auth import router as auth_router
 from app.api.routes.health import router as health_router
 from app.api.routes.companies import router as companies_router
 from app.api.routes.operators import router as operators_router
@@ -12,7 +13,7 @@ from app.api.routes.routes import router as routes_router
 from app.api.routes.scheduled_trips import router as scheduled_trips_router
 from app.api.routes.bookings import router as bookings_router
 from app.api.routes.vehicle_seats import router as vehicle_seats_router
-from app.api.routes.auth import router as auth_router
+from app.api.routes.trip_sessions import router as trip_sessions_router
 
 from app.models import (
     booking,
@@ -21,6 +22,7 @@ from app.models import (
     operator,
     route,
     scheduled_trip,
+    trip_session,
     user,
     vehicle,
     vehicle_location,
@@ -60,8 +62,8 @@ def root():
     }
 
 
-app.include_router(health_router)
 app.include_router(auth_router)
+app.include_router(health_router)
 app.include_router(companies_router)
 app.include_router(operators_router)
 app.include_router(vehicles_router)
@@ -69,4 +71,5 @@ app.include_router(routes_router)
 app.include_router(scheduled_trips_router)
 app.include_router(bookings_router)
 app.include_router(vehicle_seats_router)
+app.include_router(trip_sessions_router)
 app.include_router(locations_router)
