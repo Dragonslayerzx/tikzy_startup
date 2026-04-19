@@ -1,9 +1,11 @@
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 
 from app.api.deps import get_current_user
 from app.core.database import get_db
 from app.models.booking import Booking
+from app.models.booking_seat import BookingSeat
 from app.models.operator import Operator
 from app.models.scheduled_trip import ScheduledTrip
 from app.models.trip_session import TripSession
@@ -177,11 +179,12 @@ def get_current_trip_session(
     vehicle = trip_session.vehicle
 
     occupied_seats_count = (
-        db.query(Booking)
+        db.query(func.count(BookingSeat.id))
+        .join(Booking, BookingSeat.booking_id == Booking.id)
         .filter(Booking.scheduled_trip_id == scheduled_trip.id)
         .filter(Booking.status.in_(["confirmed", "paid", "boarded"]))
-        .count()
-    )
+        .scalar()
+    ) or 0
 
     total_capacity = vehicle.seats_capacity or 0
     occupancy_percent = (
