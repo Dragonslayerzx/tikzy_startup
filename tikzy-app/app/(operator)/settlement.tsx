@@ -1,5 +1,8 @@
-import React from "react";
+import { Ionicons } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
+import React, { useMemo } from "react";
 import {
+  ActivityIndicator,
   SafeAreaView,
   ScrollView,
   StyleSheet,
@@ -7,29 +10,130 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
+
+import { useOperatorLiveSync } from "@/src/hooks/useOperatorLiveSync";
 import { useOperatorStore } from "@/src/store/useOperatorStore";
+
+const hoursBetween = (startedAt?: string | null) => {
+  if (!startedAt) return 0;
+  const start = new Date(startedAt).getTime();
+  if (Number.isNaN(start)) return 0;
+  const diffMs = Date.now() - start;
+  return Math.max(0, diffMs / (1000 * 60 * 60));
+};
 
 export default function SettlementScreen() {
   const router = useRouter();
+
   const {
-    totalRevenue,
-    scannedTickets,
-    manualSales,
-    totalKm,
-    totalHours,
-    appRevenue,
-    cashRevenue,
-    cancellations,
-    routeOrigin,
-    routeDestination,
+    isEndingTrip,
+    isLoadingManifest,
+    isLoadingSeatMap,
+    currentTrip,
+    manifest,
+    passengers,
+    manualSalesHistory,
     endTrip,
   } = useOperatorStore();
 
-  const handleEndTrip = () => {
-    endTrip();
-    router.push("/(operator)/panel");
+  useOperatorLiveSync({
+    currentTrip: true,
+    manifest: true,
+    seatMap: true,
+  });
+
+  const isLoading = isLoadingManifest || isLoadingSeatMap;
+
+  const routeOrigin = useMemo(() => {
+    return currentTrip?.origin_city ?? manifest?.route_origin ?? "Origen";
+  }, [currentTrip, manifest]);
+
+  const routeDestination = useMemo(() => {
+    return currentTrip?.destination_city ?? manifest?.route_destination ?? "Destino";
+  }, [currentTrip, manifest]);
+
+  const totalKm = useMemo(() => {
+    return Math.round(Number(currentTrip?.distance_km ?? 0));
+  }, [currentTrip]);
+
+  const totalHours = useMemo(() => {
+    const hrs = hoursBetween(currentTrip?.started_at);
+    return Number(hrs.toFixed(1));
+  }, [currentTrip]);
+
+  const scannedTickets = useMemo(() => {
+    return passengers.filter((p) => p.is_boarded).length;
+  }, [passengers]);
+
+  const manualSales = useMemo(() => {
+    return manualSalesHistory.length;
+  }, [manualSalesHistory]);
+
+  const cashRevenue = useMemo(() => {
+    return manualSalesHistory.reduce(
+      (sum, sale) => sum + Number(sale.total_amount || 0),
+      0
+    );
+  }, [manualSalesHistory]);
+
+  const appRevenue = useMemo(() => {
+    const manualIds = new Set(manualSalesHistory.map((sale) => sale.booking_id));
+    return passengers
+      .filter((p) => !manualIds.has(p.booking_id))
+      .reduce((sum, item) => sum + Number(item.total_amount || 0), 0);
+  }, [passengers, manualSalesHistory]);
+
+  const totalRevenue = useMemo(() => {
+    return appRevenue + cashRevenue;
+  }, [appRevenue, cashRevenue]);
+
+  const cancellations = useMemo(() => {
+    return passengers.filter((p) => p.status === "cancelled").length;
+  }, [passengers]);
+
+  const formattedRevenue = useMemo(() => {
+    return `L.${Number(totalRevenue || 0).toLocaleString("es-HN", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    })}`;
+  }, [totalRevenue]);
+
+  const formattedAppRevenue = useMemo(() => {
+    return `L.${Number(appRevenue || 0).toLocaleString("es-HN", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    })}`;
+  }, [appRevenue]);
+
+  const formattedCashRevenue = useMemo(() => {
+    return `L.${Number(cashRevenue || 0).toLocaleString("es-HN", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    })}`;
+  }, [cashRevenue]);
+
+  const displayHours = useMemo(() => {
+    const value = Number(totalHours || 0);
+    return value % 1 === 0 ? `${value.toFixed(0)}` : `${value.toFixed(1)}`;
+  }, [totalHours]);
+
+  const shortOrigin = useMemo(() => {
+    if (!routeOrigin || routeOrigin === "Origen") return "TGU";
+    return routeOrigin.slice(0, 3).toUpperCase();
+  }, [routeOrigin]);
+
+  const shortDestination = useMemo(() => {
+    if (!routeDestination || routeDestination === "Destino") return "SPS";
+    return routeDestination.slice(0, 3).toUpperCase();
+  }, [routeDestination]);
+
+  const handleEndTrip = async () => {
+    try {
+      await endTrip();
+      router.replace("/(operator)/panel");
+    } catch {
+      // the store already handles the error state
+    }
   };
 
   return (
@@ -38,7 +142,6 @@ export default function SettlementScreen() {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* Header */}
         <View style={styles.header}>
           <TouchableOpacity
             style={styles.backButton}
@@ -51,12 +154,9 @@ export default function SettlementScreen() {
           <View style={{ width: 44 }} />
         </View>
 
-        {/* Total Revenue Card */}
         <View style={styles.revenueCard}>
           <Text style={styles.revenueLabel}>Total Recaudado</Text>
-          <Text style={styles.revenueAmount}>
-            L.{totalRevenue.toLocaleString("es-HN", { minimumFractionDigits: 2 })}
-          </Text>
+          <Text style={styles.revenueAmount}>{formattedRevenue}</Text>
           <View style={styles.revenueRoute}>
             <View style={styles.routeDot} />
             <Text style={styles.revenueRouteText}>
@@ -65,7 +165,13 @@ export default function SettlementScreen() {
           </View>
         </View>
 
-        {/* Stats Grid */}
+        {isLoading ? (
+          <View style={styles.loadingCard}>
+            <ActivityIndicator size="large" color="#1F3CCF" />
+            <Text style={styles.loadingText}>Actualizando liquidación...</Text>
+          </View>
+        ) : null}
+
         <View style={styles.statsGrid}>
           <View style={styles.statCard}>
             <View style={[styles.statIcon, { backgroundColor: "#EEF1FF" }]}>
@@ -74,6 +180,7 @@ export default function SettlementScreen() {
             <Text style={styles.statValue}>{scannedTickets}</Text>
             <Text style={styles.statLabel}>Boletos Escaneados</Text>
           </View>
+
           <View style={styles.statCard}>
             <View style={[styles.statIcon, { backgroundColor: "#FEF3C7" }]}>
               <Ionicons name="create-outline" size={22} color="#F5A400" />
@@ -81,6 +188,7 @@ export default function SettlementScreen() {
             <Text style={styles.statValue}>{manualSales}</Text>
             <Text style={styles.statLabel}>Ventas Manuales</Text>
           </View>
+
           <View style={styles.statCard}>
             <View style={[styles.statIcon, { backgroundColor: "#DCFCE7" }]}>
               <Ionicons name="speedometer-outline" size={22} color="#22C55E" />
@@ -88,56 +196,43 @@ export default function SettlementScreen() {
             <Text style={styles.statValue}>{totalKm}</Text>
             <Text style={styles.statLabel}>Kilómetros</Text>
           </View>
+
           <View style={styles.statCard}>
             <View style={[styles.statIcon, { backgroundColor: "#F3E8FF" }]}>
               <Ionicons name="time-outline" size={22} color="#8B5CF6" />
             </View>
-            <Text style={styles.statValue}>{totalHours}</Text>
+            <Text style={styles.statValue}>{displayHours}</Text>
             <Text style={styles.statLabel}>Hrs Recorrido</Text>
           </View>
         </View>
 
-        {/* Breakdown Card */}
         <View style={styles.breakdownCard}>
           <Text style={styles.breakdownTitle}>Desglose de Operación</Text>
 
           <View style={styles.breakdownItem}>
             <View style={styles.breakdownLeft}>
               <View
-                style={[
-                  styles.breakdownDot,
-                  { backgroundColor: "#1F3CCF" },
-                ]}
+                style={[styles.breakdownDot, { backgroundColor: "#1F3CCF" }]}
               />
               <Text style={styles.breakdownLabel}>App Tikzy</Text>
             </View>
-            <Text style={styles.breakdownValue}>
-              L.{appRevenue.toLocaleString("es-HN", { minimumFractionDigits: 2 })}
-            </Text>
+            <Text style={styles.breakdownValue}>{formattedAppRevenue}</Text>
           </View>
 
           <View style={styles.breakdownItem}>
             <View style={styles.breakdownLeft}>
               <View
-                style={[
-                  styles.breakdownDot,
-                  { backgroundColor: "#F5A400" },
-                ]}
+                style={[styles.breakdownDot, { backgroundColor: "#F5A400" }]}
               />
               <Text style={styles.breakdownLabel}>Efectivo</Text>
             </View>
-            <Text style={styles.breakdownValue}>
-              L.{cashRevenue.toLocaleString("es-HN", { minimumFractionDigits: 2 })}
-            </Text>
+            <Text style={styles.breakdownValue}>{formattedCashRevenue}</Text>
           </View>
 
           <View style={styles.breakdownItem}>
             <View style={styles.breakdownLeft}>
               <View
-                style={[
-                  styles.breakdownDot,
-                  { backgroundColor: "#EF4444" },
-                ]}
+                style={[styles.breakdownDot, { backgroundColor: "#EF4444" }]}
               />
               <Text style={styles.breakdownLabel}>Cancelaciones</Text>
             </View>
@@ -147,7 +242,6 @@ export default function SettlementScreen() {
           </View>
         </View>
 
-        {/* Mini Map */}
         <View style={styles.miniMapCard}>
           <View style={styles.miniMapPlaceholder}>
             <View style={styles.miniMapContent}>
@@ -157,21 +251,41 @@ export default function SettlementScreen() {
                 <View style={styles.miniDotB} />
               </View>
               <View style={styles.miniMapLabels}>
-                <Text style={styles.miniMapCityA}>TGU</Text>
-                <Text style={styles.miniMapCityB}>SPS</Text>
+                <Text style={styles.miniMapCityA}>{shortOrigin}</Text>
+                <Text style={styles.miniMapCityB}>{shortDestination}</Text>
               </View>
             </View>
           </View>
         </View>
 
-        {/* End Trip Button */}
+        <View style={styles.tripSummaryCard}>
+          <Text style={styles.tripSummaryTitle}>
+            {routeOrigin} → {routeDestination}
+          </Text>
+          <Text style={styles.tripSummarySubtitle}>
+            Salida {currentTrip?.departure_time ?? "--:--"} · Llegada{" "}
+            {currentTrip?.arrival_time ?? "--:--"}
+          </Text>
+          <Text style={styles.tripSummaryVehicle}>
+            {currentTrip?.vehicle_internal_code ?? "BUS---"} ·{" "}
+            {currentTrip?.vehicle_plate_number ?? "---"}
+          </Text>
+        </View>
+
         <TouchableOpacity
-          style={styles.endTripButton}
+          style={[styles.endTripButton, isEndingTrip && { opacity: 0.7 }]}
           onPress={handleEndTrip}
           activeOpacity={0.9}
+          disabled={isEndingTrip}
         >
-          <Ionicons name="flag" size={24} color="#FFFFFF" />
-          <Text style={styles.endTripButtonText}>Finalizar Viaje</Text>
+          {isEndingTrip ? (
+            <ActivityIndicator color="#FFFFFF" />
+          ) : (
+            <>
+              <Ionicons name="flag" size={24} color="#FFFFFF" />
+              <Text style={styles.endTripButtonText}>Finalizar Viaje</Text>
+            </>
+          )}
         </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>
@@ -254,6 +368,20 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "700",
     color: "#FFFFFF",
+  },
+  loadingCard: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 20,
+    paddingVertical: 18,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 16,
+    gap: 10,
+  },
+  loadingText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#64748B",
   },
   statsGrid: {
     flexDirection: "row",
@@ -340,7 +468,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
     borderRadius: 24,
     overflow: "hidden",
-    marginBottom: 20,
+    marginBottom: 16,
     shadowColor: "#000",
     shadowOpacity: 0.06,
     shadowRadius: 10,
@@ -360,7 +488,7 @@ const styles = StyleSheet.create({
   miniMapRoute: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 0,
+    width: "100%",
   },
   miniDotA: {
     width: 16,
@@ -396,6 +524,34 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: "700",
     color: "#F5A400",
+  },
+  tripSummaryCard: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 24,
+    padding: 22,
+    marginBottom: 20,
+    shadowColor: "#000",
+    shadowOpacity: 0.06,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 3,
+  },
+  tripSummaryTitle: {
+    fontSize: 18,
+    fontWeight: "800",
+    color: "#111827",
+    marginBottom: 8,
+  },
+  tripSummarySubtitle: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#6B7280",
+    marginBottom: 8,
+  },
+  tripSummaryVehicle: {
+    fontSize: 16,
+    fontWeight: "800",
+    color: "#1F3CCF",
   },
   endTripButton: {
     flexDirection: "row",
