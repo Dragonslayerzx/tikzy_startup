@@ -10,18 +10,21 @@ import {
   View,
 } from "react-native";
 
+import { useOperatorLiveSync } from "@/src/hooks/useOperatorLiveSync";
+
 export default function SeatMapScreen() {
   const {
     seatMap,
     isLoadingSeatMap,
     error,
-    loadSeatMap,
     clearError,
   } = useOperatorStore();
 
-  useEffect(() => {
-    loadSeatMap();
-  }, [loadSeatMap]);
+  useOperatorLiveSync({
+    currentTrip: true,
+    seatMap: true,
+    manifest: true,
+  });
 
   useEffect(() => {
     if (error) {

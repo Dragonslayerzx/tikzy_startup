@@ -12,6 +12,7 @@ import {
   View,
 } from "react-native";
 
+import { useOperatorLiveSync } from "@/src/hooks/useOperatorLiveSync";
 import { useOperatorStore } from "@/src/store/useOperatorStore";
 
 export default function ScannerScreen() {
@@ -25,6 +26,12 @@ export default function ScannerScreen() {
   } = useOperatorStore();
 
   const [qrValue, setQrValue] = useState("");
+
+  useOperatorLiveSync({
+    currentTrip: true,
+    manifest: true,
+    seatMap: true,
+  });
 
   useEffect(() => {
     if (error) {

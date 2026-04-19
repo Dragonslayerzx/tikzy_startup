@@ -13,6 +13,7 @@ import {
   View,
 } from "react-native";
 
+import { useOperatorLiveSync } from "@/src/hooks/useOperatorLiveSync";
 import { useOperatorStore } from "@/src/store/useOperatorStore";
 
 export default function ManualSaleScreen() {
@@ -24,7 +25,6 @@ export default function ManualSaleScreen() {
     isLoadingSeatMap,
     isCreatingManualSale,
     error,
-    loadSeatMap,
     clearError,
     createSale,
   } = useOperatorStore();
@@ -34,9 +34,11 @@ export default function ManualSaleScreen() {
   const [quantity, setQuantity] = useState(1);
   const [selectedSeats, setSelectedSeats] = useState<string[]>([]);
 
-  useEffect(() => {
-    loadSeatMap();
-  }, [loadSeatMap]);
+  useOperatorLiveSync({
+    currentTrip: true,
+    seatMap: true,
+    manifest: true,
+  });
 
   useEffect(() => {
     if (error) {

@@ -14,6 +14,8 @@ import {
   View,
 } from "react-native";
 
+import { useOperatorLiveSync } from "@/src/hooks/useOperatorLiveSync";
+
 export default function HistoryScreen() {
   const router = useRouter();
   const {
@@ -22,16 +24,17 @@ export default function HistoryScreen() {
     passengers,
     isLoadingManifest,
     isConfirmingBoarding,
-    loadPassengerManifest,
     boardPassenger,
     clearError,
   } = useOperatorStore();
 
   const [searchQuery, setSearchQuery] = useState("");
 
-  useEffect(() => {
-    loadPassengerManifest();
-  }, [loadPassengerManifest]);
+  useOperatorLiveSync({
+    currentTrip: true,
+    manifest: true,
+    seatMap: true,
+  });
 
   useEffect(() => {
     if (error) {

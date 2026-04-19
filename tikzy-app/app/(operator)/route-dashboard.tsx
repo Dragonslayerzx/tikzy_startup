@@ -12,6 +12,7 @@ import {
   View,
 } from "react-native";
 
+import { useOperatorLiveSync } from "@/src/hooks/useOperatorLiveSync";
 import { useOperatorStore } from "@/src/store/useOperatorStore";
 
 export default function RouteDashboardScreen() {
@@ -21,13 +22,14 @@ export default function RouteDashboardScreen() {
     isLoading,
     error,
     currentTrip,
-    loadCurrentTrip,
     clearError,
   } = useOperatorStore();
 
-  useEffect(() => {
-    loadCurrentTrip();
-  }, [loadCurrentTrip]);
+  useOperatorLiveSync({
+    currentTrip: true,
+    manifest: true,
+    seatMap: true,
+  });
 
   useEffect(() => {
     if (error) {

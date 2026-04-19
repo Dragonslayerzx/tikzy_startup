@@ -11,6 +11,7 @@ import {
   View,
 } from "react-native";
 
+import { useOperatorLiveSync } from "@/src/hooks/useOperatorLiveSync";
 import { useOperatorStore } from "@/src/store/useOperatorStore";
 import RouteDashboardScreen from "./route-dashboard";
 
@@ -22,17 +23,15 @@ export default function PanelScreen() {
     assignedTrips,
     selectedTrip,
     isTripActive,
-    loadPanel,
-    loadCurrentTrip,
     selectTrip,
     startTrip,
     clearError,
   } = useOperatorStore();
 
-  useEffect(() => {
-    loadPanel();
-    loadCurrentTrip();
-  }, [loadPanel, loadCurrentTrip]);
+   useOperatorLiveSync({
+    panel: true,
+    currentTrip: true,
+  });
 
   useEffect(() => {
     if (error) {

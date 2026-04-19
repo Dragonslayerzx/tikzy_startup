@@ -18,6 +18,7 @@ from app.api.routes.tickets import router as tickets_router
 from app.api.routes.passenger_manifest import router as passenger_manifest_router
 from app.api.routes.seat_map import router as seat_map_router
 from app.api.routes.manual_sales import router as manual_sales_router
+from app.api.routes.users import router as users_router
 
 
 from app.models import (
@@ -82,3 +83,4 @@ app.include_router(tickets_router)
 app.include_router(passenger_manifest_router)
 app.include_router(seat_map_router)
 app.include_router(manual_sales_router)
+app.include_router(users_router)
