@@ -55,7 +55,25 @@ export default function ManualSaleScreen() {
       });
   }, [seatMap]);
 
-  const totalPrice = 350 * quantity;
+  const roundMoney = (value: number) =>
+    Math.round((value + Number.EPSILON) * 100) / 100;
+
+  const unitPrice = useMemo(() => {
+    if (!currentTrip?.price) return 0;
+    return Number(currentTrip.price);
+  }, [currentTrip]);
+
+  const subtotal = useMemo(() => {
+    return roundMoney(unitPrice * quantity);
+  }, [unitPrice, quantity]);
+
+  const serviceFee = useMemo(() => {
+    return roundMoney(subtotal * 0.05);
+  }, [subtotal]);
+
+  const totalPrice = useMemo(() => {
+    return roundMoney(subtotal + serviceFee);
+  }, [subtotal, serviceFee]);
 
   const decrementQuantity = () => {
     if (quantity > 1) {
@@ -257,9 +275,17 @@ export default function ManualSaleScreen() {
             </View>
           </View>
 
-          <Text style={styles.totalPrice}>
-            L. {totalPrice.toFixed(2)}
+          <Text style={styles.totalBreakdown}>
+            Precio unitario: L. {unitPrice.toFixed(2)}
           </Text>
+          <Text style={styles.totalBreakdown}>
+            Subtotal: L. {subtotal.toFixed(2)}
+          </Text>
+          <Text style={styles.totalBreakdown}>
+            Cargo por servicio (5%): L. {serviceFee.toFixed(2)}
+          </Text>
+
+          <Text style={styles.totalPrice}>L. {totalPrice.toFixed(2)}</Text>
         </View>
 
         <TouchableOpacity
@@ -460,6 +486,12 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "900",
     color: "#92400E",
+  },
+  totalBreakdown: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#6B7280",
+    marginTop: 8,
   },
   totalPrice: {
     fontSize: 42,

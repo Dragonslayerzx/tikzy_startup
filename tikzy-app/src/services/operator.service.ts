@@ -57,6 +57,8 @@ export type CurrentTripSessionResponse = {
   occupancy_percent: number;
   departure_time: string;
   arrival_time: string;
+  price: string;
+  currency: string;
   status: string;
   started_at: string;
 };
@@ -139,6 +141,34 @@ export type SeatMapResponse = {
   seats: SeatMapSeatItem[];
 };
 
+export type ManualSalePayload = {
+  customer_name: string;
+  customer_phone?: string;
+  customer_email?: string;
+  passenger_count: number;
+  seat_numbers: string[];
+  payment_method?: string;
+  notes?: string;
+};
+
+export type ManualSaleResponse = {
+  booking_id: number;
+  ticket_code: string;
+  scheduled_trip_id: number;
+  customer_name: string;
+  customer_phone?: string | null;
+  customer_email?: string | null;
+  passenger_count: number;
+  seat_numbers: string[];
+  unit_price: string;
+  subtotal_amount: string;
+  service_fee: string;
+  total_amount: string;
+  status: string;
+  payment_method: string;
+  created_at: string;
+};
+
 export async function getCurrentSeatMap(token: string) {
   return apiFetch<SeatMapResponse>(
     "/trip-sessions/current/seats",
@@ -178,7 +208,11 @@ export async function confirmTicketBoarding(booking_id: number, token: string) {
 }
 
 export async function getOperatorPanel(token: string) {
-  return apiFetch<OperatorPanelResponse>("/operators/me/panel", { method: "GET" }, token);
+  return apiFetch<OperatorPanelResponse>(
+    "/operators/me/panel",
+    { method: "GET" },
+    token
+  );
 }
 
 export async function startTripSession(
@@ -207,6 +241,20 @@ export async function endCurrentTripSession(token: string) {
   return apiFetch<{ message: string; trip_session: TripSessionResponse }>(
     "/trip-sessions/end",
     { method: "POST" },
+    token
+  );
+}
+
+export async function createManualSale(
+  payload: ManualSalePayload,
+  token: string
+) {
+  return apiFetch<ManualSaleResponse>(
+    "/manual-sales/",
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
+    },
     token
   );
 }

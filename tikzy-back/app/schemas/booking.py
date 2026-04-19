@@ -37,7 +37,12 @@ class BookingResponse(BaseModel):
     customer_email: Optional[str] = None
     customer_phone: Optional[str] = None
     passenger_count: int
+
+    unit_price: Decimal
+    subtotal_amount: Decimal
+    service_fee: Decimal
     total_amount: Decimal
+
     status: str
     seats: list[BookingSeatResponse]
     created_at: datetime

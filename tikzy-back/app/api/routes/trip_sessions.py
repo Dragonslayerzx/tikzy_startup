@@ -213,6 +213,8 @@ def get_current_trip_session(
         occupancy_percent=occupancy_percent,
         departure_time=scheduled_trip.departure_time.strftime("%H:%M"),
         arrival_time=scheduled_trip.arrival_time.strftime("%H:%M"),
+        price=scheduled_trip.price,
+        currency=scheduled_trip.currency or "HNL",
         status=trip_session.status,
         started_at=trip_session.started_at,
     )

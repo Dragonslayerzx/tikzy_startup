@@ -24,7 +24,12 @@ class ManualSaleResponse(BaseModel):
     customer_email: Optional[str] = None
     passenger_count: int
     seat_numbers: list[str]
+
+    unit_price: Decimal
+    subtotal_amount: Decimal
+    service_fee: Decimal
     total_amount: Decimal
+
     status: str
     payment_method: str
     created_at: datetime

@@ -45,6 +45,9 @@ export type BookingResponse = {
   customer_email?: string | null;
   customer_phone?: string | null;
   passenger_count: number;
+  unit_price: string;
+  subtotal_amount: string;
+  service_fee: string;
   total_amount: string;
   status: string;
   seats: {

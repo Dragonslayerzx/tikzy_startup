@@ -27,9 +27,9 @@ export default function PaymentScreen() {
   const setPaymentMethod = useBookingStore((state) => state.setPaymentMethod);
   const confirmTrip = useBookingStore((state) => state.confirmTrip);
 
-  const [customerName, setCustomerName] = useState("Eros Rivera");
-  const [customerEmail, setCustomerEmail] = useState("eros@example.com");
-  const [customerPhone, setCustomerPhone] = useState("99999999");
+  const [customerName, setCustomerName] = useState("");
+  const [customerEmail, setCustomerEmail] = useState("");
+  const [customerPhone, setCustomerPhone] = useState("");
 
   const [cardName, setCardName] = useState("");
   const [cardNumber, setCardNumber] = useState("");
@@ -44,16 +44,21 @@ export default function PaymentScreen() {
     }
   }, [selectedTrip, selectedSeats]);
 
+  const roundMoney = (value: number) =>
+    Math.round((value + Number.EPSILON) * 100) / 100;
+
   const subtotal = useMemo(() => {
     if (!selectedTrip) return 0;
-    return Number(selectedTrip.price) * selectedSeats.length;
+    return roundMoney(Number(selectedTrip.price) * selectedSeats.length);
   }, [selectedTrip, selectedSeats.length]);
 
   const serviceFee = useMemo(() => {
-    return 10 * selectedSeats.length;
-  }, [selectedSeats.length]);
+    return roundMoney(subtotal * 0.05);
+  }, [subtotal]);
 
-  const total = subtotal + serviceFee;
+  const total = useMemo(() => {
+    return roundMoney(subtotal + serviceFee);
+  }, [subtotal, serviceFee]);
 
   const formatCardNumber = (value: string) => {
     const digits = value.replace(/\D/g, "").slice(0, 16);
@@ -311,7 +316,11 @@ export default function PaymentScreen() {
 
             {renderPaymentOption("card", "Tarjeta", "card-outline")}
             {renderPaymentOption("cash", "Efectivo", "cash-outline")}
-            {renderPaymentOption("transfer", "Transferencia", "swap-horizontal-outline")}
+            {renderPaymentOption(
+              "transfer",
+              "Transferencia",
+              "swap-horizontal-outline"
+            )}
 
             {paymentMethod === "card" && (
               <View style={styles.cardForm}>
@@ -376,7 +385,7 @@ export default function PaymentScreen() {
             </View>
 
             <View style={styles.summaryRow}>
-              <Text style={styles.summaryLabel}>Cargo por servicio</Text>
+              <Text style={styles.summaryLabel}>Cargo por servicio (5%)</Text>
               <Text style={styles.summaryValue}>L. {serviceFee.toFixed(2)}</Text>
             </View>
 

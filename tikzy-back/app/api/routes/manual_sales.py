@@ -1,4 +1,4 @@
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_UP
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.exc import IntegrityError
@@ -9,13 +9,26 @@ from app.core.database import get_db
 from app.models.booking import Booking
 from app.models.booking_seat import BookingSeat
 from app.models.operator import Operator
-from app.models.scheduled_trip import ScheduledTrip
 from app.models.trip_session import TripSession
 from app.models.user import User
 from app.models.vehicle_seat import VehicleSeat
 from app.schemas.manual_sale import ManualSaleCreateRequest, ManualSaleResponse
 
 router = APIRouter(prefix="/manual-sales", tags=["Manual Sales"])
+
+SERVICE_FEE_RATE = Decimal("0.05")
+MONEY_Q = Decimal("0.01")
+
+
+def quantize_money(value: Decimal) -> Decimal:
+    return value.quantize(MONEY_Q, rounding=ROUND_HALF_UP)
+
+
+def calculate_amounts(unit_price: Decimal, passenger_count: int):
+    subtotal = quantize_money(unit_price * Decimal(passenger_count))
+    service_fee = quantize_money(subtotal * SERVICE_FEE_RATE)
+    total_amount = quantize_money(subtotal + service_fee)
+    return subtotal, service_fee, total_amount
 
 
 def get_current_operator(db: Session, current_user: User) -> Operator:
@@ -141,7 +154,11 @@ def create_manual_sale(
             detail=f"Seats already occupied: {', '.join(occupied_numbers)}",
         )
 
-    total_amount = Decimal(trip.price) * payload.passenger_count
+    unit_price = quantize_money(Decimal(trip.price))
+    subtotal, service_fee, total_amount = calculate_amounts(
+        unit_price,
+        payload.passenger_count,
+    )
 
     booking = Booking(
         scheduled_trip_id=trip.id,
@@ -190,7 +207,10 @@ def create_manual_sale(
         customer_email=booking.customer_email,
         passenger_count=booking.passenger_count,
         seat_numbers=normalized_seats,
-        total_amount=booking.total_amount,
+        unit_price=unit_price,
+        subtotal_amount=subtotal,
+        service_fee=service_fee,
+        total_amount=total_amount,
         status=booking.status,
         payment_method=payload.payment_method,
         created_at=booking.created_at,

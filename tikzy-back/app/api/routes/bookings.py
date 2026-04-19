@@ -1,4 +1,4 @@
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_UP
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.exc import IntegrityError
@@ -9,7 +9,12 @@ from app.models.booking import Booking
 from app.models.booking_seat import BookingSeat
 from app.models.scheduled_trip import ScheduledTrip
 from app.models.vehicle_seat import VehicleSeat
-from app.schemas.booking import BookingCreate, BookingResponse, BookingSeatResponse, BookingUpdateStatus
+from app.schemas.booking import (
+    BookingCreate,
+    BookingResponse,
+    BookingSeatResponse,
+    BookingUpdateStatus,
+)
 
 router = APIRouter(prefix="/bookings", tags=["Bookings"])
 
@@ -19,8 +24,34 @@ ALLOWED_BOOKING_STATUSES = {
     "cancelled",
 }
 
+SERVICE_FEE_RATE = Decimal("0.05")
+MONEY_Q = Decimal("0.01")
+
+
+def quantize_money(value: Decimal) -> Decimal:
+    return value.quantize(MONEY_Q, rounding=ROUND_HALF_UP)
+
+
+def calculate_amounts(unit_price: Decimal, passenger_count: int):
+    subtotal = quantize_money(unit_price * Decimal(passenger_count))
+    service_fee = quantize_money(subtotal * SERVICE_FEE_RATE)
+    total_amount = quantize_money(subtotal + service_fee)
+    return subtotal, service_fee, total_amount
+
 
 def serialize_booking(booking: Booking) -> BookingResponse:
+    if not booking.scheduled_trip:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Booking is missing scheduled trip information",
+        )
+
+    unit_price = quantize_money(Decimal(booking.scheduled_trip.price))
+    subtotal, service_fee, total_amount = calculate_amounts(
+        unit_price,
+        booking.passenger_count,
+    )
+
     return BookingResponse(
         id=booking.id,
         scheduled_trip_id=booking.scheduled_trip_id,
@@ -28,7 +59,10 @@ def serialize_booking(booking: Booking) -> BookingResponse:
         customer_email=booking.customer_email,
         customer_phone=booking.customer_phone,
         passenger_count=booking.passenger_count,
-        total_amount=booking.total_amount,
+        unit_price=unit_price,
+        subtotal_amount=subtotal,
+        service_fee=service_fee,
+        total_amount=total_amount,
         status=booking.status,
         seats=[
             BookingSeatResponse(
@@ -49,7 +83,10 @@ def get_bookings(
     status_filter: str | None = Query(default=None, alias="status"),
     db: Session = Depends(get_db),
 ):
-    query = db.query(Booking).options(joinedload(Booking.booking_seats))
+    query = db.query(Booking).options(
+        joinedload(Booking.booking_seats),
+        joinedload(Booking.scheduled_trip),
+    )
 
     if scheduled_trip_id is not None:
         query = query.filter(Booking.scheduled_trip_id == scheduled_trip_id)
@@ -65,7 +102,10 @@ def get_bookings(
 def get_booking(booking_id: int, db: Session = Depends(get_db)):
     booking = (
         db.query(Booking)
-        .options(joinedload(Booking.booking_seats))
+        .options(
+            joinedload(Booking.booking_seats),
+            joinedload(Booking.scheduled_trip),
+        )
         .filter(Booking.id == booking_id)
         .first()
     )
@@ -165,7 +205,8 @@ def create_booking(payload: BookingCreate, db: Session = Depends(get_db)):
             detail=f"Seats already occupied: {', '.join(occupied_numbers)}",
         )
 
-    total_amount = Decimal(trip.price) * payload.passenger_count
+    unit_price = quantize_money(Decimal(trip.price))
+    _, _, total_amount = calculate_amounts(unit_price, payload.passenger_count)
 
     booking = Booking(
         scheduled_trip_id=payload.scheduled_trip_id,
@@ -202,10 +243,12 @@ def create_booking(payload: BookingCreate, db: Session = Depends(get_db)):
             detail="One or more selected seats were just booked by another user",
         )
 
-    db.refresh(booking)
     booking = (
         db.query(Booking)
-        .options(joinedload(Booking.booking_seats))
+        .options(
+            joinedload(Booking.booking_seats),
+            joinedload(Booking.scheduled_trip),
+        )
         .filter(Booking.id == booking.id)
         .first()
     )
@@ -220,7 +263,10 @@ def update_booking_status(
 ):
     booking = (
         db.query(Booking)
-        .options(joinedload(Booking.booking_seats))
+        .options(
+            joinedload(Booking.booking_seats),
+            joinedload(Booking.scheduled_trip),
+        )
         .filter(Booking.id == booking_id)
         .first()
     )
@@ -256,11 +302,13 @@ def update_booking_status(
     booking.status = payload.status
 
     db.commit()
-    db.refresh(booking)
 
     booking = (
         db.query(Booking)
-        .options(joinedload(Booking.booking_seats))
+        .options(
+            joinedload(Booking.booking_seats),
+            joinedload(Booking.scheduled_trip),
+        )
         .filter(Booking.id == booking.id)
         .first()
     )

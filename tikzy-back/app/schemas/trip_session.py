@@ -1,7 +1,8 @@
 from datetime import datetime
+from decimal import Decimal
 from typing import Optional
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict
 
 
 class TripSessionStartRequest(BaseModel):
@@ -48,6 +49,8 @@ class TripSessionDashboardResponse(BaseModel):
 
     departure_time: str
     arrival_time: str
+    price: Decimal
+    currency: str
     status: str
     started_at: datetime
 

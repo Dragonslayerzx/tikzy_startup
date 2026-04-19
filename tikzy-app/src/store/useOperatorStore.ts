@@ -11,6 +11,7 @@ import {
   TicketValidationResponse,
   confirmTicketBoarding,
   createManualSale,
+  endCurrentTripSession,
   getCurrentPassengerManifest,
   getCurrentSeatMap,
   getCurrentTripSession,
@@ -23,6 +24,7 @@ import { useAuthStore } from "@/src/store/auth.store";
 type OperatorStoreState = {
   isLoading: boolean;
   isStartingTrip: boolean;
+  isEndingTrip: boolean;
   isValidatingTicket: boolean;
   isConfirmingBoarding: boolean;
   isLoadingManifest: boolean;
@@ -47,6 +49,7 @@ type OperatorStoreState = {
   seatMap: SeatMapResponse | null;
 
   lastManualSale: ManualSaleResponse | null;
+  manualSalesHistory: ManualSaleResponse[];
 
   loadPanel: () => Promise<void>;
   loadCurrentTrip: () => Promise<void>;
@@ -55,6 +58,7 @@ type OperatorStoreState = {
 
   selectTrip: (trip: OperatorAssignedTripItem) => void;
   startTrip: () => Promise<void>;
+  endTrip: () => Promise<void>;
 
   validateScannedTicket: (qrCode: string) => Promise<void>;
   confirmBoarding: () => Promise<void>;
@@ -63,13 +67,33 @@ type OperatorStoreState = {
 
   createSale: (payload: ManualSalePayload) => Promise<void>;
 
+  totalRevenue: number;
+  scannedTickets: number;
+  manualSales: number;
+  totalKm: number;
+  totalHours: number;
+  appRevenue: number;
+  cashRevenue: number;
+  cancellations: number;
+  routeOrigin: string;
+  routeDestination: string;
+
   clearError: () => void;
   resetOperator: () => void;
+};
+
+const hoursBetween = (startedAt?: string | null) => {
+  if (!startedAt) return 0;
+  const start = new Date(startedAt).getTime();
+  if (Number.isNaN(start)) return 0;
+  const diffMs = Date.now() - start;
+  return Math.max(0, diffMs / (1000 * 60 * 60));
 };
 
 export const useOperatorStore = create<OperatorStoreState>((set, get) => ({
   isLoading: false,
   isStartingTrip: false,
+  isEndingTrip: false,
   isValidatingTicket: false,
   isConfirmingBoarding: false,
   isLoadingManifest: false,
@@ -94,6 +118,7 @@ export const useOperatorStore = create<OperatorStoreState>((set, get) => ({
   seatMap: null,
 
   lastManualSale: null,
+  manualSalesHistory: [],
 
   loadPanel: async () => {
     const token = useAuthStore.getState().token;
@@ -279,6 +304,41 @@ export const useOperatorStore = create<OperatorStoreState>((set, get) => ({
     }
   },
 
+  endTrip: async () => {
+    const token = useAuthStore.getState().token;
+
+    if (!token) {
+      set({ error: "No authenticated operator session" });
+      return;
+    }
+
+    set({ isEndingTrip: true, error: null });
+
+    try {
+      await endCurrentTripSession(token);
+
+      set({
+        isEndingTrip: false,
+        currentTrip: null,
+        isTripActive: false,
+        manifest: null,
+        passengers: [],
+        seatMap: null,
+        scannedTicket: null,
+        lastManualSale: null,
+      });
+    } catch (error) {
+      set({
+        isEndingTrip: false,
+        error:
+          error instanceof Error
+            ? error.message
+            : "No se pudo finalizar el viaje",
+      });
+      throw error;
+    }
+  },
+
   validateScannedTicket: async (qrCode) => {
     const token = useAuthStore.getState().token;
 
@@ -402,10 +462,11 @@ export const useOperatorStore = create<OperatorStoreState>((set, get) => ({
     try {
       const sale = await createManualSale(payload, token);
 
-      set({
+      set((state) => ({
         lastManualSale: sale,
+        manualSalesHistory: [sale, ...state.manualSalesHistory],
         isCreatingManualSale: false,
-      });
+      }));
 
       await get().loadCurrentTrip();
       await get().loadPassengerManifest();
@@ -422,12 +483,68 @@ export const useOperatorStore = create<OperatorStoreState>((set, get) => ({
     }
   },
 
+  get totalRevenue() {
+    const manifestRevenue = get().passengers.reduce(
+      (sum, item) => sum + Number(item.total_amount || 0),
+      0
+    );
+    return manifestRevenue;
+  },
+
+  get scannedTickets() {
+    return get().passengers.filter((p) => p.is_boarded).length;
+  },
+
+  get manualSales() {
+    return get().manualSalesHistory.length;
+  },
+
+  get totalKm() {
+    return Math.round(Number(get().currentTrip?.distance_km ?? 0));
+  },
+
+  get totalHours() {
+    const hrs = hoursBetween(get().currentTrip?.started_at);
+    return Number(hrs.toFixed(1));
+  },
+
+  get appRevenue() {
+    const manualIds = new Set(get().manualSalesHistory.map((sale) => sale.booking_id));
+    return get().passengers
+      .filter((p) => !manualIds.has(p.booking_id))
+      .reduce((sum, item) => sum + Number(item.total_amount || 0), 0);
+  },
+
+  get cashRevenue() {
+    return get().manualSalesHistory.reduce(
+      (sum, sale) => sum + Number(sale.total_amount || 0),
+      0
+    );
+  },
+
+  get cancellations() {
+    return get().passengers.filter((p) => p.status === "cancelled").length;
+  },
+
+  get routeOrigin() {
+    return get().currentTrip?.origin_city ?? get().manifest?.route_origin ?? "Origen";
+  },
+
+  get routeDestination() {
+    return (
+      get().currentTrip?.destination_city ??
+      get().manifest?.route_destination ??
+      "Destino"
+    );
+  },
+
   clearError: () => set({ error: null }),
 
   resetOperator: () =>
     set({
       isLoading: false,
       isStartingTrip: false,
+      isEndingTrip: false,
       isValidatingTicket: false,
       isConfirmingBoarding: false,
       isLoadingManifest: false,
@@ -445,5 +562,6 @@ export const useOperatorStore = create<OperatorStoreState>((set, get) => ({
       passengers: [],
       seatMap: null,
       lastManualSale: null,
+      manualSalesHistory: [],
     }),
 }));
