@@ -187,6 +187,14 @@ export default function RouteDashboardScreen() {
             <Ionicons name="list-outline" size={28} color="#FFFFFF" />
             <Text style={styles.summaryButtonText}>Resumen{"\n"}de Viaje</Text>
           </TouchableOpacity>
+          
+          <TouchableOpacity
+            style={styles.summaryButton}
+            onPress={() => router.push("/(operator)/seat-map")}
+            activeOpacity={0.9}
+          >
+            <Text style={styles.summaryButtonText}>Mapa{"\n"}de Asientos</Text>
+          </TouchableOpacity>
         </View>
       </ScrollView>
     </SafeAreaView>

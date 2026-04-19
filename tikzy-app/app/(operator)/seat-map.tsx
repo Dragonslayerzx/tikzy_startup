@@ -1,407 +1,250 @@
-import React, { useState } from "react";
+import { useOperatorStore } from "@/src/store/useOperatorStore";
+import React, { useEffect } from "react";
 import {
+  ActivityIndicator,
+  Alert,
   SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
-  TouchableOpacity,
   View,
 } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
-
-type SeatStatus = "free" | "occupied";
-
-const generateSeats = (): { label: string; status: SeatStatus }[] => {
-  const seats: { label: string; status: SeatStatus }[] = [];
-  const occupiedSeats = ["01A", "01B", "01C", "01D", "02A", "02B", "02C", "02D", "03C", "03D", "04A", "04B", "05A", "05B", "05D", "06B", "06C", "07A", "07B", "08A", "08C", "09A", "09D", "10A", "10B", "11C", "11D"];
-
-  for (let row = 1; row <= 15; row++) {
-    const cols = ["A", "B", "C", "D"];
-    cols.forEach((col) => {
-      const label = `${String(row).padStart(2, "0")}${col}`;
-      let status: SeatStatus = "free";
-      if (occupiedSeats.includes(label)) status = "occupied";
-      seats.push({ label, status });
-    });
-  }
-  return seats;
-};
 
 export default function SeatMapScreen() {
-  const router = useRouter();
-  const [seats, setSeats] = useState(generateSeats);
-  const [selected, setSelected] = useState<string | null>(null);
+  const {
+    seatMap,
+    isLoadingSeatMap,
+    error,
+    loadSeatMap,
+    clearError,
+  } = useOperatorStore();
 
-  const occupiedCount = seats.filter(
-    (s) => s.status === "occupied"
-  ).length;
+  useEffect(() => {
+    loadSeatMap();
+  }, [loadSeatMap]);
 
-  const handleSeatPress = (label: string, status: SeatStatus) => {
-    if (status === "occupied") return;
-    if (selected === label) {
-      setSelected(null);
-    } else {
-      setSelected(label);
+  useEffect(() => {
+    if (error) {
+      Alert.alert("Mapa de asientos", error, [{ text: "OK", onPress: clearError }]);
     }
-  };
+  }, [error, clearError]);
 
-  const handleConfirmSeat = () => {
-    router.push({
-      pathname: "/(operator)/manual-sale",
-      params: { seat: selected },
-    });
-  };
+  if (isLoadingSeatMap && !seatMap) {
+    return (
+      <SafeAreaView style={styles.safeArea}>
+        <View style={styles.centerBox}>
+          <ActivityIndicator size="large" color="#1F3CCF" />
+          <Text style={styles.centerText}>Cargando asientos...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (!seatMap) {
+    return (
+      <SafeAreaView style={styles.safeArea}>
+        <View style={styles.centerBox}>
+          <Text style={styles.centerTitle}>No hay mapa disponible</Text>
+          <Text style={styles.centerText}>
+            Inicia un viaje activo para ver la ocupación de asientos.
+          </Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  const groupedByRow = seatMap.seats.reduce<Record<number, typeof seatMap.seats>>(
+    (acc, seat) => {
+      if (!acc[seat.row_number]) acc[seat.row_number] = [];
+      acc[seat.row_number].push(seat);
+      return acc;
+    },
+    {}
+  );
+
+  const orderedRows = Object.keys(groupedByRow)
+    .map(Number)
+    .sort((a, b) => a - b);
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => router.back()}
-          activeOpacity={0.8}
-        >
-          <Ionicons name="chevron-back" size={24} color="#111827" />
-        </TouchableOpacity>
-        <View style={styles.headerCenter}>
-          <Text style={styles.headerTitle}>TGU → SPS</Text>
-          <Text style={styles.headerSubtitle}>
-            {occupiedCount}/60 ocupados
-          </Text>
-        </View>
-        <View style={{ width: 44 }} />
-      </View>
+      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        <Text style={styles.headerTitle}>Mapa de Asientos</Text>
+        <Text style={styles.headerSubtitle}>{seatMap.vehicle_label}</Text>
 
-      {/* Legend */}
-      <View style={styles.legend}>
-        <View style={styles.legendItem}>
-          <View style={[styles.legendDot, { backgroundColor: "#FFFFFF", borderWidth: 1, borderColor: "#D1D5DB" }]} />
-          <Text style={styles.legendText}>Libre</Text>
-        </View>
-        <View style={styles.legendItem}>
-          <View style={[styles.legendDot, { backgroundColor: "#CBD5E1" }]} />
-          <Text style={styles.legendText}>Ocupado</Text>
-        </View>
-        <View style={styles.legendItem}>
-          <View style={[styles.legendDot, { backgroundColor: "#F5A400" }]} />
-          <Text style={styles.legendText}>Seleccionado</Text>
-        </View>
-      </View>
-
-      {/* Seat Grid */}
-      <ScrollView
-        contentContainerStyle={styles.gridContent}
-        showsVerticalScrollIndicator={false}
-      >
-        {/* Bus front indicator */}
-        <View style={styles.busFront}>
-          <Ionicons name="bus" size={20} color="#94A3B8" />
-          <Text style={styles.busFrontText}>Frente del bus</Text>
+        <View style={styles.statsRow}>
+          <StatCard label="Totales" value={String(seatMap.total_seats)} />
+          <StatCard label="Ocupados" value={String(seatMap.occupied_seats)} />
+          <StatCard label="Abordados" value={String(seatMap.boarded_seats)} />
+          <StatCard label="Libres" value={String(seatMap.available_seats)} />
         </View>
 
-        {/* Column headers */}
-        <View style={styles.columnHeaders}>
-          <Text style={styles.colHeader}>A</Text>
-          <Text style={styles.colHeader}>B</Text>
-          <View style={{ width: 28 }} />
-          <Text style={styles.colHeader}>C</Text>
-          <Text style={styles.colHeader}>D</Text>
+        <View style={styles.legendCard}>
+          <LegendDot label="Libre" style={styles.availableSeat} />
+          <LegendDot label="Reservado" style={styles.occupiedSeat} />
+          <LegendDot label="Abordado" style={styles.boardedSeat} />
         </View>
 
-        {/* Rows */}
-        {Array.from({ length: 15 }, (_, rowIndex) => {
-          const rowNum = rowIndex + 1;
-          const rowSeats = seats.filter((s) =>
-            s.label.startsWith(String(rowNum).padStart(2, "0"))
-          );
-          return (
-            <View key={rowNum} style={styles.row}>
-              <Text style={styles.rowLabel}>
-                {String(rowNum).padStart(2, "0")}
-              </Text>
-              {rowSeats.slice(0, 2).map((seat) => (
-                <TouchableOpacity
-                  key={seat.label}
-                  style={[
-                    styles.seat,
-                    seat.status === "free" && styles.seatFree,
-                    seat.status === "occupied" && styles.seatOccupied,
-                    selected === seat.label && styles.seatSelected,
-                  ]}
-                  onPress={() => handleSeatPress(seat.label, seat.status)}
-                  activeOpacity={0.8}
-                  disabled={seat.status === "occupied"}
-                >
-                  <Text
-                    style={[
-                      styles.seatText,
-                      seat.status === "occupied" && styles.seatTextOccupied,
-                      selected === seat.label && styles.seatTextHighlight,
-                    ]}
-                  >
-                    {seat.label.slice(-2)}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-              {/* Aisle */}
-              <View style={styles.aisle} />
-              {rowSeats.slice(2, 4).map((seat) => (
-                <TouchableOpacity
-                  key={seat.label}
-                  style={[
-                    styles.seat,
-                    seat.status === "free" && styles.seatFree,
-                    seat.status === "occupied" && styles.seatOccupied,
-                    selected === seat.label && styles.seatSelected,
-                  ]}
-                  onPress={() => handleSeatPress(seat.label, seat.status)}
-                  activeOpacity={0.8}
-                  disabled={seat.status === "occupied"}
-                >
-                  <Text
-                    style={[
-                      styles.seatText,
-                      seat.status === "occupied" && styles.seatTextOccupied,
-                      selected === seat.label && styles.seatTextHighlight,
-                    ]}
-                  >
-                    {seat.label.slice(-2)}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          );
-        })}
-      </ScrollView>
-
-      {/* Bottom Panel */}
-      {selected && (
-        <View style={styles.bottomPanel}>
-          <View style={styles.bottomInfo}>
-            <View style={styles.bottomInfoRow}>
-              <Text style={styles.bottomLabel}>Asiento</Text>
-              <Text style={styles.bottomValue}>{selected}</Text>
-            </View>
-            <View style={styles.bottomInfoRow}>
-              <Text style={styles.bottomLabel}>Tarifa</Text>
-              <Text style={styles.bottomValue}>L. 350.00</Text>
-            </View>
+        <View style={styles.busCard}>
+          <View style={styles.driverArea}>
+            <Text style={styles.driverText}>Conductor</Text>
           </View>
-          <TouchableOpacity
-            style={styles.confirmButton}
-            onPress={handleConfirmSeat}
-            activeOpacity={0.9}
-          >
-            <Text style={styles.confirmButtonText}>Confirmar Asiento</Text>
-          </TouchableOpacity>
+
+          {orderedRows.map((rowNumber) => {
+            const seats = groupedByRow[rowNumber].sort((a, b) =>
+              a.seat_number.localeCompare(b.seat_number)
+            );
+
+            return (
+              <View key={rowNumber} style={styles.rowContainer}>
+                <Text style={styles.rowLabel}>Fila {rowNumber}</Text>
+
+                <View style={styles.rowSeats}>
+                  {seats.map((seat) => {
+                    const seatStyle = seat.is_boarded
+                      ? styles.boardedSeat
+                      : seat.is_occupied
+                      ? styles.occupiedSeat
+                      : styles.availableSeat;
+
+                    return (
+                      <View key={seat.seat_id} style={[styles.seatBox, seatStyle]}>
+                        <Text
+                          style={[
+                            styles.seatLabel,
+                            (seat.is_occupied || seat.is_boarded) && styles.seatLabelWhite,
+                          ]}
+                        >
+                          {seat.seat_number}
+                        </Text>
+                      </View>
+                    );
+                  })}
+                </View>
+              </View>
+            );
+          })}
         </View>
-      )}
+      </ScrollView>
     </SafeAreaView>
   );
 }
 
+function StatCard({ label, value }: { label: string; value: string }) {
+  return (
+    <View style={styles.statCard}>
+      <Text style={styles.statValue}>{value}</Text>
+      <Text style={styles.statLabel}>{label}</Text>
+    </View>
+  );
+}
+
+function LegendDot({ label, style }: { label: string; style: object }) {
+  return (
+    <View style={styles.legendItem}>
+      <View style={[styles.legendSwatch, style]} />
+      <Text style={styles.legendText}>{label}</Text>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: "#E8F0FE",
-  },
-  header: {
+  safeArea: { flex: 1, backgroundColor: "#E8F0FE" },
+  scrollContent: { padding: 20, paddingBottom: 32 },
+  centerBox: { flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 24 },
+  centerTitle: { fontSize: 24, fontWeight: "800", color: "#111827", marginBottom: 8 },
+  centerText: { fontSize: 16, color: "#6B7280", textAlign: "center" },
+
+  headerTitle: { fontSize: 28, fontWeight: "900", color: "#111827" },
+  headerSubtitle: { fontSize: 15, color: "#6B7280", marginTop: 4, marginBottom: 18 },
+
+  statsRow: {
     flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 20,
-    paddingVertical: 14,
-  },
-  backButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: "#FFFFFF",
-    alignItems: "center",
-    justifyContent: "center",
-    shadowColor: "#000",
-    shadowOpacity: 0.06,
-    shadowRadius: 6,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 2,
-  },
-  headerCenter: {
-    alignItems: "center",
-  },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: "800",
-    color: "#111827",
-  },
-  headerSubtitle: {
-    fontSize: 14,
-    color: "#6B7280",
-    fontWeight: "500",
-    marginTop: 2,
-  },
-  legend: {
-    flexDirection: "row",
-    justifyContent: "center",
-    gap: 16,
-    paddingVertical: 14,
-    paddingHorizontal: 20,
-    backgroundColor: "#FFFFFF",
-    marginHorizontal: 20,
-    borderRadius: 16,
+    flexWrap: "wrap",
+    gap: 10,
     marginBottom: 16,
-    shadowColor: "#000",
-    shadowOpacity: 0.04,
-    shadowRadius: 6,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 2,
   },
-  legendItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-  },
-  legendDot: {
-    width: 16,
-    height: 16,
-    borderRadius: 4,
-  },
-  legendText: {
-    fontSize: 12,
-    fontWeight: "600",
-    color: "#6B7280",
-  },
-  gridContent: {
-    paddingHorizontal: 40,
-    paddingBottom: 120,
-    alignItems: "center",
-  },
-  busFront: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 6,
-    marginBottom: 16,
-    paddingVertical: 8,
-    paddingHorizontal: 20,
+  statCard: {
     backgroundColor: "#FFFFFF",
+    borderRadius: 18,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    minWidth: "22%",
+    alignItems: "center",
+    flexGrow: 1,
+  },
+  statValue: { fontSize: 20, fontWeight: "900", color: "#1F3CCF" },
+  statLabel: { fontSize: 12, fontWeight: "700", color: "#6B7280", marginTop: 4 },
+
+  legendCard: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 18,
+    padding: 16,
+    flexDirection: "row",
+    justifyContent: "space-around",
+    marginBottom: 16,
+  },
+  legendItem: { flexDirection: "row", alignItems: "center" },
+  legendSwatch: {
+    width: 18,
+    height: 18,
+    borderRadius: 6,
+    marginRight: 8,
+  },
+  legendText: { fontSize: 13, fontWeight: "700", color: "#374151" },
+
+  busCard: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 24,
+    padding: 18,
+  },
+  driverArea: {
+    alignSelf: "center",
+    backgroundColor: "#F3F4F6",
     borderRadius: 12,
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+    marginBottom: 18,
   },
-  busFrontText: {
-    fontSize: 13,
-    color: "#94A3B8",
-    fontWeight: "600",
-  },
-  columnHeaders: {
-    flexDirection: "row",
-    justifyContent: "center",
-    gap: 8,
-    marginBottom: 8,
-    width: "100%",
-    paddingLeft: 30,
-  },
-  colHeader: {
-    width: 56,
-    textAlign: "center",
-    fontSize: 13,
-    fontWeight: "700",
-    color: "#94A3B8",
-  },
-  row: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: 8,
-    gap: 8,
+  driverText: { fontSize: 14, fontWeight: "800", color: "#374151" },
+
+  rowContainer: {
+    marginBottom: 14,
   },
   rowLabel: {
-    width: 22,
-    fontSize: 13,
-    fontWeight: "600",
-    color: "#94A3B8",
-    textAlign: "center",
-  },
-  seat: {
-    width: 56,
-    height: 48,
-    borderRadius: 12,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  seatFree: {
-    backgroundColor: "#FFFFFF",
-    borderWidth: 1.5,
-    borderColor: "#D1D5DB",
-  },
-  seatOccupied: {
-    backgroundColor: "#CBD5E1",
-  },
-  seatSelected: {
-    backgroundColor: "#F5A400",
-    borderWidth: 0,
-  },
-  seatText: {
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: "700",
-    color: "#111827",
+    color: "#6B7280",
+    marginBottom: 8,
   },
-  seatTextOccupied: {
-    color: "#64748B",
-  },
-  seatTextHighlight: {
-    color: "#FFFFFF",
-  },
-  aisle: {
-    width: 28,
-  },
-  bottomPanel: {
-    position: "absolute",
-    bottom: 0,
-    left: 0,
-    right: 0,
-    backgroundColor: "#FFFFFF",
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
-    paddingHorizontal: 24,
-    paddingTop: 22,
-    paddingBottom: 34,
-    shadowColor: "#000",
-    shadowOpacity: 0.1,
-    shadowRadius: 16,
-    shadowOffset: { width: 0, height: -4 },
-    elevation: 10,
-  },
-  bottomInfo: {
+  rowSeats: {
     flexDirection: "row",
-    justifyContent: "space-between",
-    marginBottom: 16,
+    flexWrap: "wrap",
+    gap: 10,
   },
-  bottomInfoRow: {},
-  bottomLabel: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: "#94A3B8",
-    marginBottom: 4,
-  },
-  bottomValue: {
-    fontSize: 22,
-    fontWeight: "800",
-    color: "#111827",
-  },
-  confirmButton: {
-    backgroundColor: "#1F3CCF",
-    borderRadius: 20,
-    height: 56,
+  seatBox: {
+    width: 58,
+    height: 58,
+    borderRadius: 16,
     alignItems: "center",
     justifyContent: "center",
-    shadowColor: "#1F3CCF",
-    shadowOpacity: 0.3,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 4,
   },
-  confirmButtonText: {
+  seatLabel: {
+    fontSize: 14,
+    fontWeight: "900",
+    color: "#111827",
+  },
+  seatLabelWhite: {
     color: "#FFFFFF",
-    fontSize: 17,
-    fontWeight: "800",
+  },
+
+  availableSeat: {
+    backgroundColor: "#E5E7EB",
+  },
+  occupiedSeat: {
+    backgroundColor: "#F59E0B",
+  },
+  boardedSeat: {
+    backgroundColor: "#22C55E",
   },
 });

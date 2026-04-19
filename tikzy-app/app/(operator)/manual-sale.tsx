@@ -1,5 +1,9 @@
-import React, { useState } from "react";
+import { Ionicons } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
+import React, { useEffect, useMemo, useState } from "react";
 import {
+  ActivityIndicator,
+  Alert,
   SafeAreaView,
   ScrollView,
   StyleSheet,
@@ -8,31 +12,114 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
 
-const QUICK_SEATS = ["12A", "12B", "13A", "13B"];
+import { useOperatorStore } from "@/src/store/useOperatorStore";
 
 export default function ManualSaleScreen() {
   const router = useRouter();
+
+  const {
+    currentTrip,
+    seatMap,
+    isLoadingSeatMap,
+    isCreatingManualSale,
+    error,
+    loadSeatMap,
+    clearError,
+    createSale,
+  } = useOperatorStore();
+
   const [name, setName] = useState("");
   const [dni, setDni] = useState("");
   const [quantity, setQuantity] = useState(1);
-  const [selectedSeat, setSelectedSeat] = useState<string | null>(null);
+  const [selectedSeats, setSelectedSeats] = useState<string[]>([]);
 
-  const PRICE_PER_TICKET = 350;
-  const totalPrice = PRICE_PER_TICKET * quantity;
+  useEffect(() => {
+    loadSeatMap();
+  }, [loadSeatMap]);
+
+  useEffect(() => {
+    if (error) {
+      Alert.alert("Venta manual", error, [{ text: "OK", onPress: clearError }]);
+    }
+  }, [error, clearError]);
+
+  const availableSeats = useMemo(() => {
+    return (seatMap?.seats ?? [])
+      .filter((seat) => !seat.is_occupied)
+      .sort((a, b) => {
+        if (a.row_number !== b.row_number) {
+          return a.row_number - b.row_number;
+        }
+        return a.seat_number.localeCompare(b.seat_number);
+      });
+  }, [seatMap]);
+
+  const totalPrice = 350 * quantity;
 
   const decrementQuantity = () => {
-    if (quantity > 1) setQuantity(quantity - 1);
+    if (quantity > 1) {
+      const next = quantity - 1;
+      setQuantity(next);
+      setSelectedSeats((prev) => prev.slice(0, next));
+    }
   };
 
   const incrementQuantity = () => {
-    if (quantity < 10) setQuantity(quantity + 1);
+    if (quantity < 10) {
+      setQuantity((prev) => prev + 1);
+    }
   };
 
-  const handleConfirm = () => {
-    router.back();
+  const toggleSeat = (seatNumber: string) => {
+    setSelectedSeats((prev) => {
+      const exists = prev.includes(seatNumber);
+
+      if (exists) {
+        return prev.filter((seat) => seat !== seatNumber);
+      }
+
+      if (prev.length >= quantity) {
+        return prev;
+      }
+
+      return [...prev, seatNumber];
+    });
+  };
+
+  const handleConfirm = async () => {
+    if (!name.trim()) {
+      Alert.alert("Falta información", "Ingresa el nombre completo.");
+      return;
+    }
+
+    if (selectedSeats.length !== quantity) {
+      Alert.alert(
+        "Asientos incompletos",
+        `Debes seleccionar ${quantity} asiento(s).`
+      );
+      return;
+    }
+
+    try {
+      await createSale({
+        customer_name: name.trim(),
+        customer_phone: dni.trim() || undefined,
+        passenger_count: quantity,
+        seat_numbers: selectedSeats,
+        payment_method: "cash",
+        notes: "Venta manual en operador",
+      });
+
+      Alert.alert("Venta registrada", "La venta se guardó correctamente.", [
+        {
+          text: "OK",
+          onPress: () => router.back(),
+        },
+      ]);
+    } catch {
+      // handled by store
+    }
   };
 
   return (
@@ -41,141 +128,127 @@ export default function ManualSaleScreen() {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* Header */}
-        <View style={styles.header}>
-          <TouchableOpacity
-            style={styles.backButton}
-            onPress={() => router.back()}
-            activeOpacity={0.8}
-          >
-            <Ionicons name="chevron-back" size={24} color="#111827" />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Venta Manual</Text>
-          <View style={{ width: 44 }} />
-        </View>
-
-        {/* Route Badge */}
         <View style={styles.routeBadge}>
           <Text style={styles.routeBadgeLabel}>RUTA ACTUAL</Text>
-          <Text style={styles.routeBadgeText}>TGU → SPS</Text>
+          <Text style={styles.routeBadgeText}>
+            {currentTrip
+              ? `${currentTrip.origin_city} → ${currentTrip.destination_city}`
+              : "Sin viaje activo"}
+          </Text>
         </View>
 
-        {/* Name Input */}
-        <View style={styles.fieldContainer}>
-          <Text style={styles.fieldLabel}>Nombre Completo</Text>
-          <View style={styles.inputContainer}>
-            <Ionicons name="person-outline" size={20} color="#94A3B8" />
-            <TextInput
-              value={name}
-              onChangeText={setName}
-              placeholder="Ej. Juan Pérez Hernández"
-              placeholderTextColor="#94A3B8"
-              style={styles.input}
+        <Text style={styles.label}>Nombre Completo</Text>
+        <View style={styles.inputBox}>
+          <Ionicons name="person-outline" size={20} color="#94A3B8" />
+          <TextInput
+            style={styles.input}
+            placeholder="Ej. Juan Pérez Hernández"
+            placeholderTextColor="#94A3B8"
+            value={name}
+            onChangeText={setName}
+          />
+        </View>
+
+        <Text style={styles.label}>DNI / ID (Opcional)</Text>
+        <View style={styles.inputBox}>
+          <Ionicons name="card-outline" size={20} color="#94A3B8" />
+          <TextInput
+            style={styles.input}
+            placeholder="0801-1990-12345"
+            placeholderTextColor="#94A3B8"
+            value={dni}
+            onChangeText={setDni}
+          />
+        </View>
+
+        <Text style={styles.label}>Cantidad de Boletos</Text>
+        <View style={styles.quantityCard}>
+          <TouchableOpacity
+            style={[
+              styles.quantityButton,
+              quantity <= 1 && styles.quantityButtonDisabled,
+            ]}
+            onPress={decrementQuantity}
+            disabled={quantity <= 1}
+          >
+            <Ionicons
+              name="remove"
+              size={24}
+              color={quantity <= 1 ? "#D1D5DB" : "#1F3CCF"}
             />
-          </View>
-        </View>
+          </TouchableOpacity>
 
-        {/* DNI Input */}
-        <View style={styles.fieldContainer}>
-          <Text style={styles.fieldLabel}>DNI / ID (Opcional)</Text>
-          <View style={styles.inputContainer}>
-            <Ionicons name="card-outline" size={20} color="#94A3B8" />
-            <TextInput
-              value={dni}
-              onChangeText={setDni}
-              placeholder="0801-1990-12345"
-              placeholderTextColor="#94A3B8"
-              style={styles.input}
-              keyboardType="numeric"
-            />
-          </View>
-        </View>
-
-        {/* Ticket Quantity */}
-        <View style={styles.fieldContainer}>
-          <Text style={styles.fieldLabel}>Cantidad de Boletos</Text>
-          <View style={styles.quantityRow}>
-            <TouchableOpacity
-              style={[
-                styles.quantityButton,
-                quantity <= 1 && styles.quantityButtonDisabled,
-              ]}
-              onPress={decrementQuantity}
-              activeOpacity={0.8}
-              disabled={quantity <= 1}
-            >
-              <Ionicons
-                name="remove"
-                size={22}
-                color={quantity <= 1 ? "#D1D5DB" : "#1F3CCF"}
-              />
-            </TouchableOpacity>
-
-            <View style={styles.quantityDisplay}>
-              <Text style={styles.quantityValue}>{quantity}</Text>
-              <Text style={styles.quantityLabel}>
-                {quantity === 1 ? "boleto" : "boletos"}
-              </Text>
-            </View>
-
-            <TouchableOpacity
-              style={[
-                styles.quantityButton,
-                quantity >= 10 && styles.quantityButtonDisabled,
-              ]}
-              onPress={incrementQuantity}
-              activeOpacity={0.8}
-              disabled={quantity >= 10}
-            >
-              <Ionicons
-                name="add"
-                size={22}
-                color={quantity >= 10 ? "#D1D5DB" : "#1F3CCF"}
-              />
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        {/* Seat Selection */}
-        <View style={styles.fieldContainer}>
-          <Text style={styles.fieldLabel}>Asiento</Text>
-          <View style={styles.seatsGrid}>
-            {QUICK_SEATS.map((seat) => {
-              const isSelected = selectedSeat === seat;
-              return (
-                <TouchableOpacity
-                  key={seat}
-                  style={[
-                    styles.seatButton,
-                    isSelected && styles.seatButtonSelected,
-                  ]}
-                  onPress={() => setSelectedSeat(seat)}
-                  activeOpacity={0.8}
-                >
-                  <Text
-                    style={[
-                      styles.seatButtonText,
-                      isSelected && styles.seatButtonTextSelected,
-                    ]}
-                  >
-                    {seat}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
+          <View style={styles.quantityCenter}>
+            <Text style={styles.quantityValue}>{quantity}</Text>
+            <Text style={styles.quantityText}>
+              {quantity === 1 ? "boleto" : "boletos"}
+            </Text>
           </View>
 
           <TouchableOpacity
-            style={styles.viewMapLink}
-            onPress={() => router.push("/(operator)/seat-map")}
-            activeOpacity={0.8}
+            style={styles.quantityButton}
+            onPress={incrementQuantity}
           >
-            <Ionicons name="grid-outline" size={18} color="#1F3CCF" />
-            <Text style={styles.viewMapText}>Ver mapa completo</Text>
+            <Ionicons name="add" size={24} color="#1F3CCF" />
           </TouchableOpacity>
         </View>
 
-        {/* Total Card */}
+        <Text style={styles.label}>Asiento</Text>
+
+        {isLoadingSeatMap ? (
+          <View style={styles.loadingBox}>
+            <ActivityIndicator color="#1F3CCF" />
+            <Text style={styles.loadingText}>Cargando asientos...</Text>
+          </View>
+        ) : (
+          <>
+            <View style={styles.seatsRow}>
+              {availableSeats.slice(0, 8).map((seat) => {
+                const isSelected = selectedSeats.includes(seat.seat_number);
+                const limitReached =
+                  !isSelected && selectedSeats.length >= quantity;
+
+                return (
+                  <TouchableOpacity
+                    key={seat.seat_id}
+                    style={[
+                      styles.seatButton,
+                      isSelected && styles.seatButtonSelected,
+                      limitReached && styles.seatButtonDisabled,
+                    ]}
+                    onPress={() => toggleSeat(seat.seat_number)}
+                    disabled={limitReached}
+                    activeOpacity={0.8}
+                  >
+                    <Text
+                      style={[
+                        styles.seatButtonText,
+                        isSelected && styles.seatButtonTextSelected,
+                      ]}
+                    >
+                      {seat.seat_number}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
+            <Text style={styles.selectedInfo}>
+              Seleccionados: {selectedSeats.length}/{quantity}
+              {selectedSeats.length ? ` · ${selectedSeats.join(", ")}` : ""}
+            </Text>
+          </>
+        )}
+
+        <TouchableOpacity
+          style={styles.mapLink}
+          onPress={() => router.push("/(operator)/seat-map")}
+          activeOpacity={0.8}
+        >
+          <Ionicons name="grid-outline" size={18} color="#1F3CCF" />
+          <Text style={styles.mapLinkText}>Ver mapa completo</Text>
+        </TouchableOpacity>
+
         <View style={styles.totalCard}>
           <View style={styles.totalHeader}>
             <Text style={styles.totalLabel}>Total a cobrar</Text>
@@ -185,35 +258,34 @@ export default function ManualSaleScreen() {
           </View>
 
           <Text style={styles.totalPrice}>
-            L. {totalPrice.toLocaleString("es-HN", { minimumFractionDigits: 2 })}
+            L. {totalPrice.toFixed(2)}
           </Text>
-
-          <View style={styles.totalMeta}>
-            <View style={styles.totalMetaItem}>
-              <Ionicons name="time-outline" size={16} color="#6B7280" />
-              <Text style={styles.totalMetaText}>Salida: 08:15 AM</Text>
-            </View>
-            <View style={styles.totalMetaItem}>
-              <Ionicons name="ticket-outline" size={16} color="#6B7280" />
-              <Text style={styles.totalMetaText}>
-                Ticket: #{selectedSeat ? `MAN-${selectedSeat}` : "---"}
-              </Text>
-            </View>
-          </View>
         </View>
 
-        {/* Actions */}
         <TouchableOpacity
           style={[
             styles.confirmButton,
-            (!name || !selectedSeat) && styles.confirmButtonDisabled,
+            (!name.trim() ||
+              selectedSeats.length !== quantity ||
+              isCreatingManualSale) &&
+              styles.confirmButtonDisabled,
           ]}
           onPress={handleConfirm}
+          disabled={
+            !name.trim() ||
+            selectedSeats.length !== quantity ||
+            isCreatingManualSale
+          }
           activeOpacity={0.9}
-          disabled={!name || !selectedSeat}
         >
-          <Ionicons name="checkmark-circle" size={24} color="#FFFFFF" />
-          <Text style={styles.confirmButtonText}>Confirmar Venta</Text>
+          {isCreatingManualSale ? (
+            <ActivityIndicator color="#FFFFFF" />
+          ) : (
+            <>
+              <Ionicons name="checkmark-circle" size={22} color="#FFFFFF" />
+              <Text style={styles.confirmButtonText}>Confirmar Venta</Text>
+            </>
+          )}
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -229,254 +301,200 @@ export default function ManualSaleScreen() {
 }
 
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: "#E8F0FE",
-  },
-  scrollContent: {
-    padding: 20,
-    paddingBottom: 32,
-  },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 16,
-  },
-  backButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: "#FFFFFF",
-    alignItems: "center",
-    justifyContent: "center",
-    shadowColor: "#000",
-    shadowOpacity: 0.06,
-    shadowRadius: 6,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 2,
-  },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: "800",
-    color: "#111827",
-  },
+  safeArea: { flex: 1, backgroundColor: "#E8F0FE" },
+  scrollContent: { padding: 20, paddingBottom: 32 },
   routeBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
     backgroundColor: "#1F3CCF",
-    borderRadius: 14,
-    padding: 14,
-    marginBottom: 20,
-    gap: 8,
+    borderRadius: 20,
+    paddingVertical: 18,
+    paddingHorizontal: 20,
+    alignItems: "center",
+    marginBottom: 24,
   },
   routeBadgeLabel: {
     fontSize: 13,
     fontWeight: "700",
     color: "rgba(255,255,255,0.7)",
-    letterSpacing: 0.5,
   },
   routeBadgeText: {
-    fontSize: 18,
-    fontWeight: "800",
+    fontSize: 22,
+    fontWeight: "900",
     color: "#FFFFFF",
+    marginTop: 4,
   },
-  fieldContainer: {
-    marginBottom: 20,
-  },
-  fieldLabel: {
+  label: {
     fontSize: 15,
-    fontWeight: "700",
+    fontWeight: "800",
     color: "#111827",
     marginBottom: 8,
+    marginTop: 8,
   },
-  inputContainer: {
+  inputBox: {
+    height: 58,
+    borderRadius: 20,
+    backgroundColor: "#FFFFFF",
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#FFFFFF",
-    borderRadius: 18,
     paddingHorizontal: 16,
     gap: 10,
-    shadowColor: "#000",
-    shadowOpacity: 0.04,
-    shadowRadius: 6,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 2,
+    marginBottom: 18,
   },
   input: {
     flex: 1,
-    height: 56,
     fontSize: 16,
     color: "#111827",
   },
-  quantityRow: {
+  quantityCard: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 24,
+    padding: 18,
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
-    gap: 20,
-    backgroundColor: "#FFFFFF",
-    borderRadius: 18,
-    paddingVertical: 16,
-    paddingHorizontal: 20,
-    shadowColor: "#000",
-    shadowOpacity: 0.04,
-    shadowRadius: 6,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 2,
+    justifyContent: "space-between",
+    marginBottom: 20,
   },
   quantityButton: {
-    width: 48,
-    height: 48,
-    borderRadius: 14,
+    width: 58,
+    height: 58,
+    borderRadius: 18,
     backgroundColor: "#EEF1FF",
     alignItems: "center",
     justifyContent: "center",
   },
   quantityButtonDisabled: {
-    backgroundColor: "#F1F5F9",
+    backgroundColor: "#F3F4F6",
   },
-  quantityDisplay: {
+  quantityCenter: {
     alignItems: "center",
-    minWidth: 80,
   },
   quantityValue: {
-    fontSize: 32,
-    fontWeight: "800",
+    fontSize: 42,
+    fontWeight: "900",
     color: "#111827",
   },
-  quantityLabel: {
-    fontSize: 13,
-    fontWeight: "600",
+  quantityText: {
+    fontSize: 14,
     color: "#94A3B8",
-    marginTop: 2,
+    fontWeight: "700",
   },
-  seatsGrid: {
+  loadingBox: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 20,
+    padding: 20,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  loadingText: {
+    marginTop: 10,
+    color: "#6B7280",
+  },
+  seatsRow: {
     flexDirection: "row",
+    flexWrap: "wrap",
     gap: 12,
-    marginBottom: 12,
+    marginBottom: 10,
   },
   seatButton: {
-    flex: 1,
-    height: 56,
-    borderRadius: 16,
+    width: 92,
+    height: 74,
+    borderRadius: 20,
     backgroundColor: "#FFFFFF",
     alignItems: "center",
     justifyContent: "center",
-    borderWidth: 2,
-    borderColor: "#E5E7EB",
   },
   seatButtonSelected: {
     backgroundColor: "#1F3CCF",
-    borderColor: "#1F3CCF",
+  },
+  seatButtonDisabled: {
+    opacity: 0.45,
   },
   seatButtonText: {
-    fontSize: 18,
-    fontWeight: "800",
+    fontSize: 20,
+    fontWeight: "900",
     color: "#111827",
   },
   seatButtonTextSelected: {
     color: "#FFFFFF",
   },
-  viewMapLink: {
+  selectedInfo: {
+    fontSize: 14,
+    color: "#6B7280",
+    fontWeight: "600",
+    marginBottom: 10,
+  },
+  mapLink: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     gap: 8,
-    paddingVertical: 8,
+    marginBottom: 22,
   },
-  viewMapText: {
-    fontSize: 15,
-    fontWeight: "700",
+  mapLinkText: {
+    fontSize: 16,
+    fontWeight: "800",
     color: "#1F3CCF",
   },
   totalCard: {
     backgroundColor: "#FFFFFF",
     borderRadius: 24,
-    padding: 22,
-    marginBottom: 20,
-    shadowColor: "#000",
-    shadowOpacity: 0.06,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 3,
+    padding: 20,
+    marginBottom: 18,
   },
   totalHeader: {
     flexDirection: "row",
-    alignItems: "center",
     justifyContent: "space-between",
-    marginBottom: 8,
+    alignItems: "center",
   },
   totalLabel: {
-    fontSize: 17,
-    fontWeight: "700",
+    fontSize: 18,
+    fontWeight: "800",
     color: "#111827",
   },
   cashBadge: {
     backgroundColor: "#FEF3C7",
-    borderRadius: 8,
+    borderRadius: 10,
     paddingHorizontal: 12,
-    paddingVertical: 4,
+    paddingVertical: 6,
   },
   cashBadgeText: {
     fontSize: 12,
-    fontWeight: "800",
-    color: "#D97706",
-    letterSpacing: 0.5,
+    fontWeight: "900",
+    color: "#92400E",
   },
   totalPrice: {
-    fontSize: 36,
-    fontWeight: "800",
+    fontSize: 42,
+    fontWeight: "900",
     color: "#1F3CCF",
-    marginBottom: 12,
-  },
-  totalMeta: {
-    gap: 8,
-  },
-  totalMetaItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
-  totalMetaText: {
-    fontSize: 14,
-    color: "#6B7280",
-    fontWeight: "500",
+    marginTop: 14,
   },
   confirmButton: {
-    flexDirection: "row",
-    backgroundColor: "#F5A400",
-    borderRadius: 20,
     height: 60,
+    borderRadius: 20,
+    backgroundColor: "#1F3CCF",
+    flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     gap: 10,
-    marginBottom: 12,
-    shadowColor: "#F5A400",
-    shadowOpacity: 0.3,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 4,
+    marginBottom: 14,
   },
   confirmButtonDisabled: {
-    opacity: 0.5,
+    opacity: 0.55,
   },
   confirmButtonText: {
     color: "#FFFFFF",
     fontSize: 18,
-    fontWeight: "800",
+    fontWeight: "900",
   },
   cancelButton: {
+    height: 56,
     borderRadius: 20,
-    height: 52,
+    backgroundColor: "#FFFFFF",
     alignItems: "center",
     justifyContent: "center",
-    borderWidth: 2,
-    borderColor: "#EF4444",
   },
   cancelButtonText: {
+    color: "#374151",
     fontSize: 16,
     fontWeight: "700",
-    color: "#EF4444",
   },
 });

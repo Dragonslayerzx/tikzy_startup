@@ -1,5 +1,10 @@
+import { useAuthStore } from "@/src/store/auth.store";
+import { useOperatorStore } from "@/src/store/useOperatorStore";
+import { Ionicons } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
 import React, { useState } from "react";
 import {
+  Alert,
   SafeAreaView,
   ScrollView,
   StyleSheet,
@@ -8,9 +13,6 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
-import { useOperatorStore } from "@/src/store/useOperatorStore";
 
 type SettingItemProps = {
   icon: keyof typeof Ionicons.glyphMap;
@@ -81,7 +83,9 @@ function ToggleItem({
 
 export default function SettingsScreen() {
   const router = useRouter();
-  const { operatorName, operatorId } = useOperatorStore();
+
+  const { operatorName, operatorId, resetOperator } = useOperatorStore();
+  const logout = useAuthStore((state) => state.logout);
 
   const [gpsEnabled, setGpsEnabled] = useState(true);
   const [trafficAlerts, setTrafficAlerts] = useState(true);
@@ -89,7 +93,25 @@ export default function SettingsScreen() {
   const [soundEnabled, setSoundEnabled] = useState(false);
 
   const handleLogout = () => {
-    router.replace("/login");
+    Alert.alert(
+      "Cerrar sesión",
+      "¿Deseas cerrar tu sesión?",
+      [
+        {
+          text: "Cancelar",
+          style: "cancel",
+        },
+        {
+          text: "Cerrar sesión",
+          style: "destructive",
+          onPress: async () => {
+            resetOperator();
+            await logout();
+            router.replace("/login");
+          },
+        },
+      ]
+    );
   };
 
   return (
@@ -98,24 +120,21 @@ export default function SettingsScreen() {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* Header */}
         <Text style={styles.headerTitle}>Ajustes</Text>
 
-        {/* Profile Card */}
         <View style={styles.profileCard}>
           <View style={styles.avatarLarge}>
             <Ionicons name="person" size={36} color="#FFFFFF" />
           </View>
           <View style={styles.profileInfo}>
-            <Text style={styles.profileName}>{operatorName}</Text>
-            <Text style={styles.profileId}>ID: {operatorId}</Text>
+            <Text style={styles.profileName}>{operatorName || "Operador"}</Text>
+            <Text style={styles.profileId}>ID: {operatorId ?? "--"}</Text>
           </View>
           <TouchableOpacity style={styles.editButton} activeOpacity={0.8}>
             <Ionicons name="pencil-outline" size={18} color="#1F3CCF" />
           </TouchableOpacity>
         </View>
 
-        {/* Route Preferences */}
         <Text style={styles.sectionTitle}>Preferencias de Ruta</Text>
         <View style={styles.sectionCard}>
           <ToggleItem
@@ -137,7 +156,6 @@ export default function SettingsScreen() {
           />
         </View>
 
-        {/* Notifications */}
         <Text style={styles.sectionTitle}>Notificaciones</Text>
         <View style={styles.sectionCard}>
           <ToggleItem
@@ -157,7 +175,6 @@ export default function SettingsScreen() {
           />
         </View>
 
-        {/* Security */}
         <Text style={styles.sectionTitle}>Seguridad y Soporte</Text>
         <View style={styles.sectionCard}>
           <SettingItem icon="lock-closed-outline" label="Cambiar contraseña" />
@@ -184,7 +201,6 @@ export default function SettingsScreen() {
           />
         </View>
 
-        {/* Legal */}
         <Text style={styles.sectionTitle}>Información Legal</Text>
         <View style={styles.sectionCard}>
           <SettingItem
@@ -200,7 +216,6 @@ export default function SettingsScreen() {
           />
         </View>
 
-        {/* Logout */}
         <TouchableOpacity
           style={styles.logoutButton}
           onPress={handleLogout}
@@ -210,7 +225,6 @@ export default function SettingsScreen() {
           <Text style={styles.logoutButtonText}>Cerrar sesión</Text>
         </TouchableOpacity>
 
-        {/* Version */}
         <Text style={styles.versionText}>Tikzy Operador v1.0.0</Text>
       </ScrollView>
     </SafeAreaView>

@@ -114,6 +114,39 @@ export type PassengerManifestResponse = {
   passengers: PassengerManifestItem[];
 };
 
+export type SeatMapSeatItem = {
+  seat_id: number;
+  seat_number: string;
+  row_number: number;
+  column_number?: number | null;
+  position_type?: string | null;
+  is_occupied: boolean;
+  is_boarded: boolean;
+  booking_id?: number | null;
+  passenger_name?: string | null;
+  booking_status?: string | null;
+};
+
+export type SeatMapResponse = {
+  trip_session_id: number;
+  scheduled_trip_id: number;
+  vehicle_id: number;
+  vehicle_label: string;
+  total_seats: number;
+  occupied_seats: number;
+  boarded_seats: number;
+  available_seats: number;
+  seats: SeatMapSeatItem[];
+};
+
+export async function getCurrentSeatMap(token: string) {
+  return apiFetch<SeatMapResponse>(
+    "/trip-sessions/current/seats",
+    { method: "GET" },
+    token
+  );
+}
+
 export async function getCurrentPassengerManifest(token: string) {
   return apiFetch<PassengerManifestResponse>(
     "/trip-sessions/current/passengers",

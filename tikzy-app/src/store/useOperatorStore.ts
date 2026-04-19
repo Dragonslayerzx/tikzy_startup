@@ -2,12 +2,17 @@ import { create } from "zustand";
 
 import {
   CurrentTripSessionResponse,
+  ManualSalePayload,
+  ManualSaleResponse,
   OperatorAssignedTripItem,
   PassengerManifestItem,
   PassengerManifestResponse,
+  SeatMapResponse,
   TicketValidationResponse,
   confirmTicketBoarding,
+  createManualSale,
   getCurrentPassengerManifest,
+  getCurrentSeatMap,
   getCurrentTripSession,
   getOperatorPanel,
   startTripSession,
@@ -21,6 +26,8 @@ type OperatorStoreState = {
   isValidatingTicket: boolean;
   isConfirmingBoarding: boolean;
   isLoadingManifest: boolean;
+  isLoadingSeatMap: boolean;
+  isCreatingManualSale: boolean;
   error: string | null;
 
   operatorId: number | null;
@@ -37,9 +44,15 @@ type OperatorStoreState = {
   manifest: PassengerManifestResponse | null;
   passengers: PassengerManifestItem[];
 
+  seatMap: SeatMapResponse | null;
+
+  lastManualSale: ManualSaleResponse | null;
+
   loadPanel: () => Promise<void>;
   loadCurrentTrip: () => Promise<void>;
   loadPassengerManifest: () => Promise<void>;
+  loadSeatMap: () => Promise<void>;
+
   selectTrip: (trip: OperatorAssignedTripItem) => void;
   startTrip: () => Promise<void>;
 
@@ -47,6 +60,8 @@ type OperatorStoreState = {
   confirmBoarding: () => Promise<void>;
   boardPassenger: (bookingId: number) => Promise<void>;
   clearScannedTicket: () => void;
+
+  createSale: (payload: ManualSalePayload) => Promise<void>;
 
   clearError: () => void;
   resetOperator: () => void;
@@ -58,6 +73,8 @@ export const useOperatorStore = create<OperatorStoreState>((set, get) => ({
   isValidatingTicket: false,
   isConfirmingBoarding: false,
   isLoadingManifest: false,
+  isLoadingSeatMap: false,
+  isCreatingManualSale: false,
   error: null,
 
   operatorId: null,
@@ -74,8 +91,13 @@ export const useOperatorStore = create<OperatorStoreState>((set, get) => ({
   manifest: null,
   passengers: [],
 
+  seatMap: null,
+
+  lastManualSale: null,
+
   loadPanel: async () => {
     const token = useAuthStore.getState().token;
+
     if (!token) {
       set({ error: "No authenticated operator session" });
       return;
@@ -97,13 +119,16 @@ export const useOperatorStore = create<OperatorStoreState>((set, get) => ({
       set({
         isLoading: false,
         error:
-          error instanceof Error ? error.message : "No se pudo cargar el panel del operador",
+          error instanceof Error
+            ? error.message
+            : "No se pudo cargar el panel del operador",
       });
     }
   },
 
   loadCurrentTrip: async () => {
     const token = useAuthStore.getState().token;
+
     if (!token) {
       set({
         currentTrip: null,
@@ -115,6 +140,7 @@ export const useOperatorStore = create<OperatorStoreState>((set, get) => ({
 
     try {
       const trip = await getCurrentTripSession(token);
+
       set({
         currentTrip: trip,
         isTripActive: true,
@@ -124,12 +150,16 @@ export const useOperatorStore = create<OperatorStoreState>((set, get) => ({
       const message =
         error instanceof Error ? error.message : "No active trip session";
 
-      if (message.includes("No active trip session found") || message.includes("404")) {
+      if (
+        message.includes("No active trip session found") ||
+        message.includes("404")
+      ) {
         set({
           currentTrip: null,
           isTripActive: false,
           manifest: null,
           passengers: [],
+          seatMap: null,
         });
         return;
       }
@@ -144,6 +174,7 @@ export const useOperatorStore = create<OperatorStoreState>((set, get) => ({
 
   loadPassengerManifest: async () => {
     const token = useAuthStore.getState().token;
+
     if (!token) {
       set({ error: "No authenticated operator session" });
       return;
@@ -153,6 +184,7 @@ export const useOperatorStore = create<OperatorStoreState>((set, get) => ({
 
     try {
       const manifest = await getCurrentPassengerManifest(token);
+
       set({
         manifest,
         passengers: manifest.passengers,
@@ -164,7 +196,38 @@ export const useOperatorStore = create<OperatorStoreState>((set, get) => ({
         passengers: [],
         isLoadingManifest: false,
         error:
-          error instanceof Error ? error.message : "No se pudo cargar el manifiesto",
+          error instanceof Error
+            ? error.message
+            : "No se pudo cargar el manifiesto",
+      });
+    }
+  },
+
+  loadSeatMap: async () => {
+    const token = useAuthStore.getState().token;
+
+    if (!token) {
+      set({ error: "No authenticated operator session" });
+      return;
+    }
+
+    set({ isLoadingSeatMap: true, error: null });
+
+    try {
+      const seatMap = await getCurrentSeatMap(token);
+
+      set({
+        seatMap,
+        isLoadingSeatMap: false,
+      });
+    } catch (error) {
+      set({
+        seatMap: null,
+        isLoadingSeatMap: false,
+        error:
+          error instanceof Error
+            ? error.message
+            : "No se pudo cargar el mapa de asientos",
       });
     }
   },
@@ -208,7 +271,9 @@ export const useOperatorStore = create<OperatorStoreState>((set, get) => ({
       set({
         isStartingTrip: false,
         error:
-          error instanceof Error ? error.message : "No se pudo iniciar el viaje",
+          error instanceof Error
+            ? error.message
+            : "No se pudo iniciar el viaje",
       });
       throw error;
     }
@@ -216,6 +281,7 @@ export const useOperatorStore = create<OperatorStoreState>((set, get) => ({
 
   validateScannedTicket: async (qrCode) => {
     const token = useAuthStore.getState().token;
+
     if (!token) {
       set({ error: "No authenticated operator session" });
       return;
@@ -236,7 +302,9 @@ export const useOperatorStore = create<OperatorStoreState>((set, get) => ({
         scannedTicket: null,
         isValidatingTicket: false,
         error:
-          error instanceof Error ? error.message : "No se pudo validar el boleto",
+          error instanceof Error
+            ? error.message
+            : "No se pudo validar el boleto",
       });
       throw error;
     }
@@ -272,11 +340,14 @@ export const useOperatorStore = create<OperatorStoreState>((set, get) => ({
 
       await get().loadCurrentTrip();
       await get().loadPassengerManifest();
+      await get().loadSeatMap();
     } catch (error) {
       set({
         isConfirmingBoarding: false,
         error:
-          error instanceof Error ? error.message : "No se pudo confirmar el abordaje",
+          error instanceof Error
+            ? error.message
+            : "No se pudo confirmar el abordaje",
       });
       throw error;
     }
@@ -284,6 +355,7 @@ export const useOperatorStore = create<OperatorStoreState>((set, get) => ({
 
   boardPassenger: async (bookingId) => {
     const token = useAuthStore.getState().token;
+
     if (!token) {
       set({ error: "No authenticated operator session" });
       return;
@@ -293,20 +365,63 @@ export const useOperatorStore = create<OperatorStoreState>((set, get) => ({
 
     try {
       await confirmTicketBoarding(bookingId, token);
+
       set({ isConfirmingBoarding: false });
+
       await get().loadCurrentTrip();
       await get().loadPassengerManifest();
+      await get().loadSeatMap();
     } catch (error) {
       set({
         isConfirmingBoarding: false,
         error:
-          error instanceof Error ? error.message : "No se pudo confirmar el abordaje",
+          error instanceof Error
+            ? error.message
+            : "No se pudo confirmar el abordaje",
       });
       throw error;
     }
   },
 
   clearScannedTicket: () => set({ scannedTicket: null }),
+
+  createSale: async (payload) => {
+    const token = useAuthStore.getState().token;
+
+    if (!token) {
+      set({ error: "No authenticated operator session" });
+      return;
+    }
+
+    set({
+      isCreatingManualSale: true,
+      error: null,
+      lastManualSale: null,
+    });
+
+    try {
+      const sale = await createManualSale(payload, token);
+
+      set({
+        lastManualSale: sale,
+        isCreatingManualSale: false,
+      });
+
+      await get().loadCurrentTrip();
+      await get().loadPassengerManifest();
+      await get().loadSeatMap();
+    } catch (error) {
+      set({
+        isCreatingManualSale: false,
+        error:
+          error instanceof Error
+            ? error.message
+            : "No se pudo registrar la venta manual",
+      });
+      throw error;
+    }
+  },
+
   clearError: () => set({ error: null }),
 
   resetOperator: () =>
@@ -316,6 +431,8 @@ export const useOperatorStore = create<OperatorStoreState>((set, get) => ({
       isValidatingTicket: false,
       isConfirmingBoarding: false,
       isLoadingManifest: false,
+      isLoadingSeatMap: false,
+      isCreatingManualSale: false,
       error: null,
       operatorId: null,
       operatorName: "",
@@ -326,5 +443,7 @@ export const useOperatorStore = create<OperatorStoreState>((set, get) => ({
       scannedTicket: null,
       manifest: null,
       passengers: [],
+      seatMap: null,
+      lastManualSale: null,
     }),
 }));
