@@ -1,5 +1,9 @@
-import React from "react";
+import { Ionicons } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
+import React, { useEffect } from "react";
 import {
+  ActivityIndicator,
+  Alert,
   SafeAreaView,
   ScrollView,
   StyleSheet,
@@ -7,15 +11,75 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
+
+import { useOperatorStore } from "@/src/store/useOperatorStore";
 
 export default function TicketValidationScreen() {
   const router = useRouter();
 
-  const handleConfirmBoarding = () => {
-    router.back();
+  const {
+    error,
+    scannedTicket,
+    isConfirmingBoarding,
+    confirmBoarding,
+    clearError,
+    clearScannedTicket,
+  } = useOperatorStore();
+
+  useEffect(() => {
+    if (error) {
+      Alert.alert("Validación de boleto", error, [{ text: "OK", onPress: clearError }]);
+    }
+  }, [error, clearError]);
+
+  useEffect(() => {
+    return () => {
+      clearError();
+    };
+  }, [clearError]);
+
+  if (!scannedTicket) {
+    return (
+      <SafeAreaView style={styles.safeArea}>
+        <View style={styles.emptyBox}>
+          <Text style={styles.emptyTitle}>No hay boleto validado</Text>
+          <Text style={styles.emptyText}>
+            Escanea un QR primero desde la pantalla de escáner.
+          </Text>
+
+          <TouchableOpacity
+            style={styles.closeButton}
+            onPress={() => router.back()}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.closeButtonText}>Volver</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  const handleConfirmBoarding = async () => {
+    try {
+      await confirmBoarding();
+
+      Alert.alert("Abordaje confirmado", "El pasajero fue marcado como abordado.", [
+        {
+          text: "OK",
+          onPress: () => {
+            clearScannedTicket();
+            router.back();
+          },
+        },
+      ]);
+    } catch {
+      // handled by store
+    }
   };
+
+  const firstSeat = scannedTicket.seats[0]?.seat_number ?? "--";
+  const passengerType =
+    scannedTicket.passenger_count > 1 ? "Grupo" : "Adulto";
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -23,11 +87,13 @@ export default function TicketValidationScreen() {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* Header */}
         <View style={styles.header}>
           <TouchableOpacity
             style={styles.backButton}
-            onPress={() => router.back()}
+            onPress={() => {
+              clearScannedTicket();
+              router.back();
+            }}
             activeOpacity={0.8}
           >
             <Ionicons name="chevron-back" size={24} color="#111827" />
@@ -36,109 +102,140 @@ export default function TicketValidationScreen() {
           <View style={{ width: 44 }} />
         </View>
 
-        {/* Success Banner */}
-        <View style={styles.successBanner}>
+        <View
+          style={[
+            styles.successBanner,
+            scannedTicket.is_boarded && styles.successBannerBoarded,
+          ]}
+        >
           <View style={styles.successIconContainer}>
-            <Ionicons name="checkmark-circle" size={32} color="#22C55E" />
+            <Ionicons
+              name={scannedTicket.is_boarded ? "checkmark-done-circle" : "checkmark-circle"}
+              size={32}
+              color="#22C55E"
+            />
           </View>
           <View style={styles.successTextContainer}>
-            <Text style={styles.successTitle}>Boleto Validado</Text>
-            <Text style={styles.successSubtitle}>ESCANEO EXITOSO</Text>
+            <Text style={styles.successTitle}>
+              {scannedTicket.is_boarded ? "Ya abordado" : "Boleto Validado"}
+            </Text>
+            <Text style={styles.successSubtitle}>
+              {scannedTicket.is_boarded ? "REGISTRO YA CONFIRMADO" : "ESCANEO EXITOSO"}
+            </Text>
           </View>
         </View>
 
-        {/* Passenger Info Card */}
         <View style={styles.card}>
           <View style={styles.passengerHeader}>
             <View style={styles.avatarLarge}>
               <Ionicons name="person" size={36} color="#94A3B8" />
             </View>
             <View style={styles.passengerInfo}>
-              <Text style={styles.passengerName}>Alejandro Ramírez Paz</Text>
-              <Text style={styles.ticketId}>Boleto #TK-88902</Text>
+              <Text style={styles.passengerName}>{scannedTicket.customer_name}</Text>
+              <Text style={styles.ticketId}>Boleto #{scannedTicket.ticket_code}</Text>
             </View>
           </View>
 
           <View style={styles.divider} />
 
-          {/* Seat Info */}
           <View style={styles.infoRow}>
             <View style={styles.infoItem}>
               <Text style={styles.infoLabel}>ASIENTO ASIGNADO</Text>
               <View style={styles.seatBadge}>
-                <Text style={styles.seatText}>04A</Text>
+                <Text style={styles.seatText}>{firstSeat}</Text>
               </View>
             </View>
             <View style={styles.infoItem}>
               <Text style={styles.infoLabel}>TIPO</Text>
-              <Text style={styles.infoValue}>Adulto</Text>
+              <Text style={styles.infoValue}>{passengerType}</Text>
             </View>
           </View>
 
           <View style={styles.divider} />
 
-          {/* Route Info */}
           <View style={styles.routeSection}>
             <View style={styles.routeRow}>
               <View style={styles.routeDotOrigin} />
               <View style={styles.routeTextContainer}>
                 <Text style={styles.routeLabel}>ORIGEN</Text>
-                <Text style={styles.routeValue}>Tegucigalpa</Text>
+                <Text style={styles.routeValue}>{scannedTicket.origin_city}</Text>
               </View>
             </View>
+
             <View style={styles.routeConnector} />
+
             <View style={styles.routeRow}>
               <View style={styles.routeDotDestination} />
               <View style={styles.routeTextContainer}>
                 <Text style={styles.routeLabel}>DESTINO</Text>
-                <Text style={styles.routeValue}>San Pedro Sula</Text>
+                <Text style={styles.routeValue}>{scannedTicket.destination_city}</Text>
               </View>
             </View>
           </View>
 
           <View style={styles.divider} />
 
-          {/* Departure Info */}
           <View style={styles.departureRow}>
             <View style={styles.departureItem}>
               <Text style={styles.departureLabel}>SALIDA ESTIMADA</Text>
-              <Text style={styles.departureValue}>08:15 AM</Text>
+              <Text style={styles.departureValue}>{scannedTicket.departure_time}</Text>
             </View>
             <View style={styles.departureItem}>
               <Text style={styles.departureLabel}>RUTA</Text>
-              <Text style={styles.departureValue}>402 - Directo</Text>
+              <Text style={styles.departureValue}>{scannedTicket.route_label}</Text>
             </View>
           </View>
         </View>
 
-        {/* Payment Status */}
         <View style={styles.paymentCard}>
           <View style={styles.paymentHeader}>
             <Ionicons name="card-outline" size={22} color="#22C55E" />
             <Text style={styles.paymentTitle}>Estado de Pago</Text>
           </View>
+
           <View style={styles.paymentStatusRow}>
             <View style={styles.paidBadge}>
-              <Text style={styles.paidText}>PAGADO</Text>
+              <Text style={styles.paidText}>
+                {scannedTicket.status.toUpperCase()}
+              </Text>
             </View>
-            <Text style={styles.paymentMethod}>Tarjeta •••• 4242</Text>
+            <Text style={styles.paymentMethod}>
+              {scannedTicket.passenger_count} pasajero(s)
+            </Text>
           </View>
-          <Text style={styles.paymentAmount}>L. 350.00</Text>
+
+          <Text style={styles.paymentAmount}>
+            L. {Number(scannedTicket.total_amount).toFixed(2)}
+          </Text>
         </View>
 
-        {/* Actions */}
         <TouchableOpacity
-          style={styles.confirmButton}
+          style={[
+            styles.confirmButton,
+            scannedTicket.is_boarded && styles.confirmButtonDisabled,
+          ]}
           onPress={handleConfirmBoarding}
           activeOpacity={0.9}
+          disabled={scannedTicket.is_boarded || isConfirmingBoarding}
         >
-          <Ionicons name="checkmark-circle" size={24} color="#FFFFFF" />
-          <Text style={styles.confirmButtonText}>Confirmar Abordaje</Text>
+          {isConfirmingBoarding ? (
+            <ActivityIndicator color="#FFFFFF" />
+          ) : (
+            <>
+              <Ionicons name="checkmark-circle" size={24} color="#FFFFFF" />
+              <Text style={styles.confirmButtonText}>
+                {scannedTicket.is_boarded ? "Abordaje ya confirmado" : "Confirmar Abordaje"}
+              </Text>
+            </>
+          )}
         </TouchableOpacity>
 
         <TouchableOpacity
           style={styles.closeButton}
-          onPress={() => router.back()}
+          onPress={() => {
+            clearScannedTicket();
+            router.back();
+          }}
           activeOpacity={0.8}
         >
           <Text style={styles.closeButtonText}>Cerrar</Text>
@@ -156,6 +253,24 @@ const styles = StyleSheet.create({
   scrollContent: {
     padding: 20,
     paddingBottom: 32,
+  },
+  emptyBox: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 24,
+  },
+  emptyTitle: {
+    fontSize: 24,
+    fontWeight: "900",
+    color: "#111827",
+    marginBottom: 8,
+  },
+  emptyText: {
+    fontSize: 16,
+    color: "#6B7280",
+    textAlign: "center",
+    marginBottom: 20,
   },
   header: {
     flexDirection: "row",
@@ -191,6 +306,9 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#BBF7D0",
     gap: 14,
+  },
+  successBannerBoarded: {
+    backgroundColor: "#ECFDF5",
   },
   successIconContainer: {
     width: 52,
@@ -347,7 +465,7 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     color: "#94A3B8",
     letterSpacing: 0.5,
-    marginBottom: 6,
+    marginBottom: 8,
   },
   departureValue: {
     fontSize: 17,
@@ -358,7 +476,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
     borderRadius: 24,
     padding: 22,
-    marginBottom: 16,
+    marginBottom: 18,
     shadowColor: "#000",
     shadowOpacity: 0.06,
     shadowRadius: 10,
@@ -372,52 +490,48 @@ const styles = StyleSheet.create({
     marginBottom: 14,
   },
   paymentTitle: {
-    fontSize: 17,
-    fontWeight: "700",
+    fontSize: 18,
+    fontWeight: "800",
     color: "#111827",
   },
   paymentStatusRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 12,
-    marginBottom: 8,
+    justifyContent: "space-between",
+    marginBottom: 14,
   },
   paidBadge: {
     backgroundColor: "#DCFCE7",
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 4,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 999,
   },
   paidText: {
-    fontSize: 12,
-    fontWeight: "800",
     color: "#166534",
-    letterSpacing: 0.5,
+    fontWeight: "800",
+    fontSize: 13,
   },
   paymentMethod: {
-    fontSize: 14,
     color: "#6B7280",
-    fontWeight: "500",
+    fontWeight: "600",
+    fontSize: 14,
   },
   paymentAmount: {
     fontSize: 28,
-    fontWeight: "800",
+    fontWeight: "900",
     color: "#111827",
   },
   confirmButton: {
-    flexDirection: "row",
-    backgroundColor: "#F5A400",
+    backgroundColor: "#1F3CCF",
     borderRadius: 20,
-    height: 60,
+    minHeight: 58,
+    flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     gap: 10,
-    marginBottom: 12,
-    shadowColor: "#F5A400",
-    shadowOpacity: 0.3,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 4,
+  },
+  confirmButtonDisabled: {
+    opacity: 0.6,
   },
   confirmButtonText: {
     color: "#FFFFFF",
@@ -425,16 +539,16 @@ const styles = StyleSheet.create({
     fontWeight: "800",
   },
   closeButton: {
-    borderRadius: 20,
-    height: 52,
+    marginTop: 14,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 18,
+    minHeight: 54,
     alignItems: "center",
     justifyContent: "center",
-    borderWidth: 2,
-    borderColor: "#D1D5DB",
   },
   closeButtonText: {
+    color: "#111827",
     fontSize: 16,
     fontWeight: "700",
-    color: "#6B7280",
   },
 });

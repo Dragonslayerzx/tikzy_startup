@@ -1,31 +1,71 @@
-import React from "react";
+import { Ionicons } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
+import React, { useEffect, useState } from "react";
 import {
+  ActivityIndicator,
+  Alert,
   SafeAreaView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
+
+import { useOperatorStore } from "@/src/store/useOperatorStore";
 
 export default function ScannerScreen() {
   const router = useRouter();
+
+  const {
+    error,
+    isValidatingTicket,
+    validateScannedTicket,
+    clearError,
+  } = useOperatorStore();
+
+  const [qrValue, setQrValue] = useState("");
+
+  useEffect(() => {
+    if (error) {
+      Alert.alert("Escáner", error, [{ text: "OK", onPress: clearError }]);
+    }
+  }, [error, clearError]);
 
   const handleManualSale = () => {
     router.push("/(operator)/manual-sale");
   };
 
-  const handleSimulateScan = () => {
-    router.push("/(operator)/ticket-validation");
+  const handleValidate = async () => {
+    if (!qrValue.trim()) {
+      Alert.alert("Código QR", "Ingresa o pega el valor del QR.");
+      return;
+    }
+
+    try {
+      await validateScannedTicket(qrValue.trim());
+      router.push("/(operator)/ticket-validation");
+    } catch {
+      // alert handled by store
+    }
+  };
+
+  const handleDemoScan = async () => {
+    const demoValue = "tikzy-booking-1";
+    setQrValue(demoValue);
+
+    try {
+      await validateScannedTicket(demoValue);
+      router.push("/(operator)/ticket-validation");
+    } catch {
+      // alert handled by store
+    }
   };
 
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.container}>
-        {/* Camera Placeholder */}
         <View style={styles.cameraContainer}>
-          {/* Top Overlay */}
           <View style={styles.overlay}>
             <Text style={styles.scanTitle}>Escanea el Código QR</Text>
             <Text style={styles.scanSubtitle}>
@@ -33,28 +73,33 @@ export default function ScannerScreen() {
             </Text>
           </View>
 
-          {/* Scanner Frame */}
           <View style={styles.scannerFrameContainer}>
             <TouchableOpacity
               style={styles.scannerFrame}
-              onPress={handleSimulateScan}
+              onPress={handleDemoScan}
               activeOpacity={0.9}
+              disabled={isValidatingTicket}
             >
-              {/* Corner decorations */}
               <View style={[styles.corner, styles.cornerTopLeft]} />
               <View style={[styles.corner, styles.cornerTopRight]} />
               <View style={[styles.corner, styles.cornerBottomLeft]} />
               <View style={[styles.corner, styles.cornerBottomRight]} />
 
-              {/* QR icon in center */}
               <View style={styles.qrCenter}>
-                <Ionicons name="qr-code-outline" size={64} color="rgba(255,255,255,0.3)" />
+                {isValidatingTicket ? (
+                  <ActivityIndicator size="large" color="#FFFFFF" />
+                ) : (
+                  <Ionicons
+                    name="qr-code-outline"
+                    size={64}
+                    color="rgba(255,255,255,0.3)"
+                  />
+                )}
                 <Text style={styles.tapHint}>Toca para simular escaneo</Text>
               </View>
             </TouchableOpacity>
           </View>
 
-          {/* Flashlight Button */}
           <View style={styles.flashContainer}>
             <TouchableOpacity style={styles.flashButton} activeOpacity={0.8}>
               <Ionicons name="flashlight-outline" size={24} color="#FFFFFF" />
@@ -63,8 +108,34 @@ export default function ScannerScreen() {
           </View>
         </View>
 
-        {/* Bottom Section */}
         <View style={styles.bottomSection}>
+          <Text style={styles.inputLabel}>Valor del QR</Text>
+          <TextInput
+            style={styles.input}
+            placeholder="tikzy-booking-1"
+            placeholderTextColor="#94A3B8"
+            value={qrValue}
+            onChangeText={setQrValue}
+            autoCapitalize="none"
+            autoCorrect={false}
+          />
+
+          <TouchableOpacity
+            style={styles.validateButton}
+            onPress={handleValidate}
+            activeOpacity={0.9}
+            disabled={isValidatingTicket}
+          >
+            {isValidatingTicket ? (
+              <ActivityIndicator color="#FFFFFF" />
+            ) : (
+              <>
+                <Ionicons name="checkmark-circle-outline" size={22} color="#FFFFFF" />
+                <Text style={styles.validateButtonText}>Validar boleto</Text>
+              </>
+            )}
+          </TouchableOpacity>
+
           <TouchableOpacity
             style={styles.manualButton}
             onPress={handleManualSale}
@@ -193,6 +264,36 @@ const styles = StyleSheet.create({
     shadowRadius: 12,
     shadowOffset: { width: 0, height: -4 },
     elevation: 8,
+    gap: 14,
+  },
+  inputLabel: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#374151",
+  },
+  input: {
+    height: 56,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "#D1D5DB",
+    paddingHorizontal: 16,
+    fontSize: 16,
+    color: "#111827",
+    backgroundColor: "#F9FAFB",
+  },
+  validateButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 10,
+    backgroundColor: "#1F3CCF",
+    borderRadius: 18,
+    height: 56,
+  },
+  validateButtonText: {
+    fontSize: 17,
+    fontWeight: "800",
+    color: "#FFFFFF",
   },
   manualButton: {
     flexDirection: "row",

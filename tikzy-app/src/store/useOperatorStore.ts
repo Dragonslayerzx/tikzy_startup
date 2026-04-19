@@ -1,133 +1,330 @@
 import { create } from "zustand";
 
-export type Vehicle = {
-  id: string;
-  interno: string;
-  placa: string;
-};
+import {
+  CurrentTripSessionResponse,
+  OperatorAssignedTripItem,
+  PassengerManifestItem,
+  PassengerManifestResponse,
+  TicketValidationResponse,
+  confirmTicketBoarding,
+  getCurrentPassengerManifest,
+  getCurrentTripSession,
+  getOperatorPanel,
+  startTripSession,
+  validateTicket,
+} from "@/src/services/operator.service";
+import { useAuthStore } from "@/src/store/auth.store";
 
-export type Passenger = {
-  id: string;
-  name: string;
-  seat: string;
-  ticketNumber: string;
-  type: string; // Adulto, Estudiante, Adulto Mayor
-  boarded: boolean;
-};
+type OperatorStoreState = {
+  isLoading: boolean;
+  isStartingTrip: boolean;
+  isValidatingTicket: boolean;
+  isConfirmingBoarding: boolean;
+  isLoadingManifest: boolean;
+  error: string | null;
 
-export type OperatorState = {
-  // Operator info
+  operatorId: number | null;
   operatorName: string;
-  operatorId: string;
 
-  // Vehicle
-  vehicles: Vehicle[];
-  selectedVehicle: Vehicle | null;
+  assignedTrips: OperatorAssignedTripItem[];
+  selectedTrip: OperatorAssignedTripItem | null;
 
-  // Route
-  routeOrigin: string;
-  routeDestination: string;
-  nextDeparture: string;
-  routeId: string;
-  routeName: string;
-
-  // Trip state
+  currentTrip: CurrentTripSessionResponse | null;
   isTripActive: boolean;
-  currentOccupancy: number;
-  totalCapacity: number;
-  nextStop: string;
-  nextStopMinutes: number;
-  distanceKm: number;
 
-  // Passengers manifest
-  passengers: Passenger[];
+  scannedTicket: TicketValidationResponse | null;
 
-  // Settlement
-  totalRevenue: number;
-  scannedTickets: number;
-  manualSales: number;
-  totalKm: number;
-  totalHours: string;
-  appRevenue: number;
-  cashRevenue: number;
-  cancellations: number;
+  manifest: PassengerManifestResponse | null;
+  passengers: PassengerManifestItem[];
 
-  // Actions
-  selectVehicle: (vehicle: Vehicle) => void;
-  startTrip: () => void;
-  endTrip: () => void;
-  boardPassenger: (passengerId: string) => void;
-  addManualPassenger: (passenger: Passenger) => void;
+  loadPanel: () => Promise<void>;
+  loadCurrentTrip: () => Promise<void>;
+  loadPassengerManifest: () => Promise<void>;
+  selectTrip: (trip: OperatorAssignedTripItem) => void;
+  startTrip: () => Promise<void>;
+
+  validateScannedTicket: (qrCode: string) => Promise<void>;
+  confirmBoarding: () => Promise<void>;
+  boardPassenger: (bookingId: number) => Promise<void>;
+  clearScannedTicket: () => void;
+
+  clearError: () => void;
   resetOperator: () => void;
 };
 
-const mockVehicles: Vehicle[] = [
-  { id: "1", interno: "BUS-402", placa: "TPX-982" },
-  { id: "2", interno: "BUS-115", placa: "TPX-441" },
-  { id: "3", interno: "BUS-208", placa: "TPX-763" },
-];
+export const useOperatorStore = create<OperatorStoreState>((set, get) => ({
+  isLoading: false,
+  isStartingTrip: false,
+  isValidatingTicket: false,
+  isConfirmingBoarding: false,
+  isLoadingManifest: false,
+  error: null,
 
-const mockPassengers: Passenger[] = [
-  { id: "1", name: "Alejandro Ramírez", seat: "04A", ticketNumber: "TK-88902", type: "Adulto", boarded: true },
-  { id: "2", name: "Sofía Valenzuela", seat: "04B", ticketNumber: "TK-88903", type: "Estudiante", boarded: true },
-  { id: "3", name: "Roberto Mendez Ruiz", seat: "12C", ticketNumber: "TK-88915", type: "Adulto", boarded: false },
-  { id: "4", name: "Lucía Fernández", seat: "12D", ticketNumber: "TK-88916", type: "Adulto Mayor", boarded: false },
-  { id: "5", name: "Marcos Aurelio", seat: "15A", ticketNumber: "TK-88942", type: "Adulto", boarded: true },
-];
+  operatorId: null,
+  operatorName: "",
 
-const initialState = {
-  operatorName: "Anthony Ochoa",
-  operatorId: "OP-1024",
-  vehicles: mockVehicles,
-  selectedVehicle: mockVehicles[0],
-  routeOrigin: "Tegucigalpa",
-  routeDestination: "San Pedro Sula",
-  nextDeparture: "08:15 AM",
-  routeId: "A-12",
-  routeName: "402 - Directo",
+  assignedTrips: [],
+  selectedTrip: null,
+
+  currentTrip: null,
   isTripActive: false,
-  currentOccupancy: 32,
-  totalCapacity: 45,
-  nextStop: "Terminal Norte",
-  nextStopMinutes: 4,
-  distanceKm: 89,
-  passengers: mockPassengers,
-  totalRevenue: 14500.0,
-  scannedTickets: 342,
-  manualSales: 58,
-  totalKm: 128.5,
-  totalHours: "06:45",
-  appRevenue: 9240.0,
-  cashRevenue: 5340.0,
-  cancellations: 0,
-};
 
-export const useOperatorStore = create<OperatorState>()((set) => ({
-  ...initialState,
+  scannedTicket: null,
 
-  selectVehicle: (vehicle) => set({ selectedVehicle: vehicle }),
+  manifest: null,
+  passengers: [],
 
-  startTrip: () => set({ isTripActive: true }),
+  loadPanel: async () => {
+    const token = useAuthStore.getState().token;
+    if (!token) {
+      set({ error: "No authenticated operator session" });
+      return;
+    }
 
-  endTrip: () =>
+    set({ isLoading: true, error: null });
+
+    try {
+      const panel = await getOperatorPanel(token);
+
+      set((state) => ({
+        operatorId: panel.operator_id,
+        operatorName: panel.operator_name,
+        assignedTrips: panel.assigned_trips,
+        selectedTrip: state.selectedTrip ?? panel.assigned_trips[0] ?? null,
+        isLoading: false,
+      }));
+    } catch (error) {
+      set({
+        isLoading: false,
+        error:
+          error instanceof Error ? error.message : "No se pudo cargar el panel del operador",
+      });
+    }
+  },
+
+  loadCurrentTrip: async () => {
+    const token = useAuthStore.getState().token;
+    if (!token) {
+      set({
+        currentTrip: null,
+        isTripActive: false,
+        error: "No authenticated operator session",
+      });
+      return;
+    }
+
+    try {
+      const trip = await getCurrentTripSession(token);
+      set({
+        currentTrip: trip,
+        isTripActive: true,
+        error: null,
+      });
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "No active trip session";
+
+      if (message.includes("No active trip session found") || message.includes("404")) {
+        set({
+          currentTrip: null,
+          isTripActive: false,
+          manifest: null,
+          passengers: [],
+        });
+        return;
+      }
+
+      set({
+        currentTrip: null,
+        isTripActive: false,
+        error: message,
+      });
+    }
+  },
+
+  loadPassengerManifest: async () => {
+    const token = useAuthStore.getState().token;
+    if (!token) {
+      set({ error: "No authenticated operator session" });
+      return;
+    }
+
+    set({ isLoadingManifest: true, error: null });
+
+    try {
+      const manifest = await getCurrentPassengerManifest(token);
+      set({
+        manifest,
+        passengers: manifest.passengers,
+        isLoadingManifest: false,
+      });
+    } catch (error) {
+      set({
+        manifest: null,
+        passengers: [],
+        isLoadingManifest: false,
+        error:
+          error instanceof Error ? error.message : "No se pudo cargar el manifiesto",
+      });
+    }
+  },
+
+  selectTrip: (trip) => set({ selectedTrip: trip }),
+
+  startTrip: async () => {
+    const token = useAuthStore.getState().token;
+    const selectedTrip = get().selectedTrip;
+
+    if (!token) {
+      set({ error: "No authenticated operator session" });
+      return;
+    }
+
+    if (!selectedTrip) {
+      set({ error: "Selecciona un viaje antes de iniciar" });
+      return;
+    }
+
+    set({ isStartingTrip: true, error: null });
+
+    try {
+      await startTripSession(
+        {
+          scheduled_trip_id: selectedTrip.scheduled_trip_id,
+          vehicle_id: selectedTrip.vehicle_id,
+        },
+        token
+      );
+
+      const currentTrip = await getCurrentTripSession(token);
+
+      set({
+        currentTrip,
+        isTripActive: true,
+        isStartingTrip: false,
+        error: null,
+      });
+    } catch (error) {
+      set({
+        isStartingTrip: false,
+        error:
+          error instanceof Error ? error.message : "No se pudo iniciar el viaje",
+      });
+      throw error;
+    }
+  },
+
+  validateScannedTicket: async (qrCode) => {
+    const token = useAuthStore.getState().token;
+    if (!token) {
+      set({ error: "No authenticated operator session" });
+      return;
+    }
+
+    set({ isValidatingTicket: true, error: null, scannedTicket: null });
+
+    try {
+      const ticket = await validateTicket(qrCode, token);
+
+      set({
+        scannedTicket: ticket,
+        isValidatingTicket: false,
+        error: null,
+      });
+    } catch (error) {
+      set({
+        scannedTicket: null,
+        isValidatingTicket: false,
+        error:
+          error instanceof Error ? error.message : "No se pudo validar el boleto",
+      });
+      throw error;
+    }
+  },
+
+  confirmBoarding: async () => {
+    const token = useAuthStore.getState().token;
+    const scannedTicket = get().scannedTicket;
+
+    if (!token) {
+      set({ error: "No authenticated operator session" });
+      return;
+    }
+
+    if (!scannedTicket) {
+      set({ error: "No hay boleto validado" });
+      return;
+    }
+
+    set({ isConfirmingBoarding: true, error: null });
+
+    try {
+      const updatedTicket = await confirmTicketBoarding(
+        scannedTicket.booking_id,
+        token
+      );
+
+      set({
+        scannedTicket: updatedTicket,
+        isConfirmingBoarding: false,
+        error: null,
+      });
+
+      await get().loadCurrentTrip();
+      await get().loadPassengerManifest();
+    } catch (error) {
+      set({
+        isConfirmingBoarding: false,
+        error:
+          error instanceof Error ? error.message : "No se pudo confirmar el abordaje",
+      });
+      throw error;
+    }
+  },
+
+  boardPassenger: async (bookingId) => {
+    const token = useAuthStore.getState().token;
+    if (!token) {
+      set({ error: "No authenticated operator session" });
+      return;
+    }
+
+    set({ isConfirmingBoarding: true, error: null });
+
+    try {
+      await confirmTicketBoarding(bookingId, token);
+      set({ isConfirmingBoarding: false });
+      await get().loadCurrentTrip();
+      await get().loadPassengerManifest();
+    } catch (error) {
+      set({
+        isConfirmingBoarding: false,
+        error:
+          error instanceof Error ? error.message : "No se pudo confirmar el abordaje",
+      });
+      throw error;
+    }
+  },
+
+  clearScannedTicket: () => set({ scannedTicket: null }),
+  clearError: () => set({ error: null }),
+
+  resetOperator: () =>
     set({
+      isLoading: false,
+      isStartingTrip: false,
+      isValidatingTicket: false,
+      isConfirmingBoarding: false,
+      isLoadingManifest: false,
+      error: null,
+      operatorId: null,
+      operatorName: "",
+      assignedTrips: [],
+      selectedTrip: null,
+      currentTrip: null,
       isTripActive: false,
+      scannedTicket: null,
+      manifest: null,
+      passengers: [],
     }),
-
-  boardPassenger: (passengerId) =>
-    set((state) => ({
-      passengers: state.passengers.map((p) =>
-        p.id === passengerId ? { ...p, boarded: true } : p
-      ),
-      currentOccupancy: state.currentOccupancy + 1,
-    })),
-
-  addManualPassenger: (passenger) =>
-    set((state) => ({
-      passengers: [...state.passengers, passenger],
-      manualSales: state.manualSales + 1,
-      currentOccupancy: state.currentOccupancy + 1,
-    })),
-
-  resetOperator: () => set({ ...initialState }),
 }));

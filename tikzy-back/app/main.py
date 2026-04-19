@@ -14,6 +14,8 @@ from app.api.routes.scheduled_trips import router as scheduled_trips_router
 from app.api.routes.bookings import router as bookings_router
 from app.api.routes.vehicle_seats import router as vehicle_seats_router
 from app.api.routes.trip_sessions import router as trip_sessions_router
+from app.api.routes.tickets import router as tickets_router
+from app.api.routes.passenger_manifest import router as passenger_manifest_router
 
 from app.models import (
     booking,
@@ -73,3 +75,5 @@ app.include_router(bookings_router)
 app.include_router(vehicle_seats_router)
 app.include_router(trip_sessions_router)
 app.include_router(locations_router)
+app.include_router(tickets_router)
+app.include_router(passenger_manifest_router)

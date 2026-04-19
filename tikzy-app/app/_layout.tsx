@@ -16,8 +16,6 @@ export default function RootLayout() {
       <Stack.Screen name="(auth)" />
       <Stack.Screen name="(tabs)" />
       <Stack.Screen name="(operator)" />
-      <Stack.Screen name="booking" />
-      <Stack.Screen name="profile" />
     </Stack>
   );
 }

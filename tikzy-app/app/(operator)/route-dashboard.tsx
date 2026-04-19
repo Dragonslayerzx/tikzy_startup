@@ -1,5 +1,9 @@
-import React from "react";
+import { Ionicons } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
+import React, { useEffect } from "react";
 import {
+  ActivityIndicator,
+  Alert,
   SafeAreaView,
   ScrollView,
   StyleSheet,
@@ -7,24 +11,60 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
+
 import { useOperatorStore } from "@/src/store/useOperatorStore";
 
 export default function RouteDashboardScreen() {
   const router = useRouter();
+
   const {
-    currentOccupancy,
-    totalCapacity,
-    nextStop,
-    nextStopMinutes,
-    distanceKm,
-    routeId,
+    isLoading,
+    error,
+    currentTrip,
+    loadCurrentTrip,
+    clearError,
   } = useOperatorStore();
 
-  const occupancyPercent = Math.round(
-    (currentOccupancy / totalCapacity) * 100
-  );
+  useEffect(() => {
+    loadCurrentTrip();
+  }, [loadCurrentTrip]);
+
+  useEffect(() => {
+    if (error) {
+      Alert.alert("Ruta activa", error, [{ text: "OK", onPress: clearError }]);
+    }
+  }, [error, clearError]);
+
+  if (isLoading && !currentTrip) {
+    return (
+      <SafeAreaView style={styles.safeArea}>
+        <View style={styles.centerBox}>
+          <ActivityIndicator size="large" color="#1F3CCF" />
+          <Text style={styles.centerText}>Cargando viaje activo...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (!currentTrip) {
+    return (
+      <SafeAreaView style={styles.safeArea}>
+        <View style={styles.centerBox}>
+          <Text style={styles.centerTitle}>No hay viaje activo</Text>
+          <Text style={styles.centerText}>
+            Inicia un viaje desde el panel del operador.
+          </Text>
+
+          <TouchableOpacity
+            style={styles.backToPanelButton}
+            onPress={() => router.replace("/(operator)/panel")}
+          >
+            <Text style={styles.backToPanelButtonText}>Volver al panel</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -32,7 +72,6 @@ export default function RouteDashboardScreen() {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* Header */}
         <View style={styles.header}>
           <View style={styles.headerLeft}>
             <View style={styles.avatarContainer}>
@@ -46,52 +85,57 @@ export default function RouteDashboardScreen() {
           </View>
         </View>
 
-        {/* Occupancy Card */}
         <View style={styles.card}>
           <View style={styles.occupancyHeader}>
             <View>
               <Text style={styles.occupancyLabel}>Ocupación Actual</Text>
               <Text style={styles.occupancyValue}>
-                {currentOccupancy}/{totalCapacity}
+                {currentTrip.current_occupancy}/{currentTrip.total_capacity}
               </Text>
             </View>
             <View style={styles.busIconContainer}>
               <Ionicons name="bus" size={28} color="#1F3CCF" />
             </View>
           </View>
+
           <View style={styles.progressBarBg}>
             <View
-              style={[styles.progressBarFill, { width: `${occupancyPercent}%` }]}
+              style={[
+                styles.progressBarFill,
+                { width: `${currentTrip.occupancy_percent}%` },
+              ]}
             />
           </View>
+
           <Text style={styles.occupancyPercent}>
-            {occupancyPercent}% de capacidad completada
+            {currentTrip.occupancy_percent}% de capacidad completada
           </Text>
         </View>
 
-        {/* Next Stop & Distance */}
         <View style={styles.statsRow}>
           <View style={[styles.statCard, { flex: 1, marginRight: 10 }]}>
             <Text style={styles.statLabel}>PRÓXIMA PARADA</Text>
-            <Text style={styles.statValue}>{nextStop}</Text>
+            <Text style={styles.statValue}>{currentTrip.next_stop}</Text>
             <View style={styles.statMeta}>
               <Ionicons name="time-outline" size={14} color="#1F3CCF" />
-              <Text style={styles.statMetaText}>{nextStopMinutes} min</Text>
+              <Text style={styles.statMetaText}>
+                {currentTrip.next_stop_minutes} min
+              </Text>
             </View>
           </View>
+
           <View style={[styles.statCard, { flex: 1 }]}>
             <Text style={styles.statLabel}>DISTANCIA</Text>
-            <Text style={styles.statValue}>{distanceKm} km</Text>
+            <Text style={styles.statValue}>{currentTrip.distance_km} km</Text>
             <View style={styles.statMeta}>
               <Ionicons name="git-compare-outline" size={14} color="#F5A400" />
               <Text style={[styles.statMetaText, { color: "#F5A400" }]}>
-                Ruta {routeId}
+                Ruta {currentTrip.route_id}
               </Text>
             </View>
           </View>
         </View>
 
-        {/* Map Preview */}
         <View style={styles.mapCard}>
           <View style={styles.mapPlaceholder}>
             <View style={styles.mapContent}>
@@ -102,13 +146,29 @@ export default function RouteDashboardScreen() {
               </View>
             </View>
           </View>
-          <TouchableOpacity style={styles.navigateButton} activeOpacity={0.8}>
+
+          <TouchableOpacity
+            style={styles.navigateButton}
+            onPress={() => router.push("/(operator)/map")}
+            activeOpacity={0.8}
+          >
             <Ionicons name="navigate" size={18} color="#1F3CCF" />
             <Text style={styles.navigateText}>Navegar</Text>
           </TouchableOpacity>
         </View>
 
-        {/* Action Buttons */}
+        <View style={styles.routeSummaryCard}>
+          <Text style={styles.routeSummaryTitle}>
+            {currentTrip.origin_city} → {currentTrip.destination_city}
+          </Text>
+          <Text style={styles.routeSummarySubtitle}>
+            Salida {currentTrip.departure_time} · Llegada {currentTrip.arrival_time}
+          </Text>
+          <Text style={styles.vehicleText}>
+            {currentTrip.vehicle_internal_code} · {currentTrip.vehicle_plate_number}
+          </Text>
+        </View>
+
         <View style={styles.actionRow}>
           <TouchableOpacity
             style={styles.scanButton}
@@ -141,6 +201,35 @@ const styles = StyleSheet.create({
   scrollContent: {
     padding: 20,
     paddingBottom: 32,
+  },
+  centerBox: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 24,
+  },
+  centerTitle: {
+    fontSize: 24,
+    fontWeight: "900",
+    color: "#111827",
+    marginBottom: 8,
+  },
+  centerText: {
+    fontSize: 16,
+    color: "#6B7280",
+    textAlign: "center",
+  },
+  backToPanelButton: {
+    marginTop: 22,
+    backgroundColor: "#1F3CCF",
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    borderRadius: 16,
+  },
+  backToPanelButtonText: {
+    color: "#FFFFFF",
+    fontWeight: "800",
+    fontSize: 16,
   },
   header: {
     flexDirection: "row",
@@ -244,9 +333,10 @@ const styles = StyleSheet.create({
     borderRadius: 5,
   },
   occupancyPercent: {
-    fontSize: 13,
-    color: "#94A3B8",
-    marginTop: 8,
+    marginTop: 12,
+    fontSize: 14,
+    color: "#6B7280",
+    fontWeight: "600",
   },
   statsRow: {
     flexDirection: "row",
@@ -255,40 +345,40 @@ const styles = StyleSheet.create({
   statCard: {
     backgroundColor: "#FFFFFF",
     borderRadius: 20,
-    padding: 18,
+    padding: 16,
     shadowColor: "#000",
     shadowOpacity: 0.06,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 3 },
-    elevation: 2,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 3,
   },
   statLabel: {
-    fontSize: 12,
-    fontWeight: "700",
-    color: "#94A3B8",
-    letterSpacing: 0.5,
-    marginBottom: 6,
+    fontSize: 13,
+    fontWeight: "800",
+    color: "#6B7280",
+    marginBottom: 10,
   },
   statValue: {
-    fontSize: 22,
-    fontWeight: "800",
+    fontSize: 26,
+    fontWeight: "900",
     color: "#111827",
-    marginBottom: 8,
+    minHeight: 62,
   },
   statMeta: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 4,
+    gap: 6,
+    marginTop: 10,
   },
   statMetaText: {
-    fontSize: 13,
-    fontWeight: "600",
+    fontSize: 14,
+    fontWeight: "700",
     color: "#1F3CCF",
   },
   mapCard: {
     backgroundColor: "#FFFFFF",
     borderRadius: 24,
-    overflow: "hidden",
+    padding: 14,
     marginBottom: 16,
     shadowColor: "#000",
     shadowOpacity: 0.06,
@@ -297,96 +387,117 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   mapPlaceholder: {
-    height: 200,
-    backgroundColor: "#D4E8D1",
+    height: 250,
+    borderRadius: 18,
+    backgroundColor: "#F1F5F9",
+    alignItems: "center",
+    justifyContent: "center",
+    overflow: "hidden",
   },
   mapContent: {
-    flex: 1,
     alignItems: "center",
     justifyContent: "center",
   },
   mapPlaceholderText: {
-    fontSize: 14,
-    color: "#94A3B8",
-    marginTop: 8,
+    marginTop: 10,
+    color: "#64748B",
+    fontWeight: "700",
+    fontSize: 16,
   },
   trafficBadge: {
-    backgroundColor: "#FFFFFF",
-    paddingHorizontal: 14,
-    paddingVertical: 6,
-    borderRadius: 12,
     marginTop: 12,
-    shadowColor: "#000",
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 2,
+    backgroundColor: "#DBEAFE",
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 999,
   },
   trafficText: {
+    color: "#1D4ED8",
+    fontWeight: "800",
     fontSize: 13,
-    fontWeight: "600",
-    color: "#22C55E",
   },
   navigateButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-    padding: 14,
-    backgroundColor: "rgba(209, 233, 206, 0.5)",
-    marginHorizontal: 16,
-    marginVertical: 12,
-    borderRadius: 14,
+    marginTop: 14,
+    minHeight: 52,
+    borderRadius: 16,
+    backgroundColor: "#FFFFFF",
     borderWidth: 1,
     borderColor: "#E5E7EB",
+    alignItems: "center",
+    justifyContent: "center",
+    flexDirection: "row",
+    gap: 8,
   },
   navigateText: {
-    fontSize: 15,
-    fontWeight: "700",
     color: "#1F3CCF",
+    fontSize: 18,
+    fontWeight: "900",
+  },
+  routeSummaryCard: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 20,
+    padding: 18,
+    marginBottom: 18,
+    shadowColor: "#000",
+    shadowOpacity: 0.06,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 3,
+  },
+  routeSummaryTitle: {
+    fontSize: 22,
+    fontWeight: "900",
+    color: "#111827",
+  },
+  routeSummarySubtitle: {
+    marginTop: 8,
+    fontSize: 15,
+    color: "#4B5563",
+    fontWeight: "600",
+  },
+  vehicleText: {
+    marginTop: 8,
+    fontSize: 15,
+    color: "#1F3CCF",
+    fontWeight: "800",
   },
   actionRow: {
     flexDirection: "row",
+    justifyContent: "space-between",
     gap: 14,
   },
   scanButton: {
     flex: 1,
     backgroundColor: "#F5A400",
-    borderRadius: 24,
-    paddingVertical: 24,
+    borderRadius: 26,
+    minHeight: 120,
     alignItems: "center",
     justifyContent: "center",
-    gap: 8,
-    shadowColor: "#F5A400",
-    shadowOpacity: 0.3,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 4,
+    paddingHorizontal: 14,
   },
   scanButtonText: {
     color: "#FFFFFF",
-    fontSize: 16,
-    fontWeight: "800",
+    fontSize: 20,
+    fontWeight: "900",
     textAlign: "center",
+    marginTop: 8,
+    lineHeight: 24,
   },
   summaryButton: {
     flex: 1,
     backgroundColor: "#1F3CCF",
-    borderRadius: 24,
-    paddingVertical: 24,
+    borderRadius: 26,
+    minHeight: 120,
     alignItems: "center",
     justifyContent: "center",
-    gap: 8,
-    shadowColor: "#1F3CCF",
-    shadowOpacity: 0.3,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 4,
+    paddingHorizontal: 14,
   },
   summaryButtonText: {
     color: "#FFFFFF",
-    fontSize: 16,
-    fontWeight: "800",
+    fontSize: 20,
+    fontWeight: "900",
     textAlign: "center",
+    marginTop: 8,
+    lineHeight: 24,
   },
 });

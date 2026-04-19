@@ -179,7 +179,7 @@ def get_current_trip_session(
     occupied_seats_count = (
         db.query(Booking)
         .filter(Booking.scheduled_trip_id == scheduled_trip.id)
-        .filter(Booking.status.in_(["confirmed", "paid"]))
+        .filter(Booking.status.in_(["confirmed", "paid", "boarded"]))
         .count()
     )
 

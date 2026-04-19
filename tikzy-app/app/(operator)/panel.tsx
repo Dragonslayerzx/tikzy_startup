@@ -1,5 +1,8 @@
-import React from "react";
+import { Ionicons } from "@expo/vector-icons";
+import React, { useEffect } from "react";
 import {
+  ActivityIndicator,
+  Alert,
   SafeAreaView,
   ScrollView,
   StyleSheet,
@@ -7,30 +10,49 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+
 import { useOperatorStore } from "@/src/store/useOperatorStore";
 import RouteDashboardScreen from "./route-dashboard";
 
 export default function PanelScreen() {
   const {
+    isLoading,
+    isStartingTrip,
+    error,
+    assignedTrips,
+    selectedTrip,
     isTripActive,
-    vehicles,
-    selectedVehicle,
-    selectVehicle,
-    routeOrigin,
-    routeDestination,
-    nextDeparture,
+    loadPanel,
+    loadCurrentTrip,
+    selectTrip,
     startTrip,
+    clearError,
   } = useOperatorStore();
 
-  // When trip is active, show the route dashboard instead
+  useEffect(() => {
+    loadPanel();
+    loadCurrentTrip();
+  }, [loadPanel, loadCurrentTrip]);
+
+  useEffect(() => {
+    if (error) {
+      Alert.alert("Operador", error, [{ text: "OK", onPress: clearError }]);
+    }
+  }, [error, clearError]);
+
   if (isTripActive) {
     return <RouteDashboardScreen />;
   }
 
-  const handleStartTrip = () => {
-    startTrip();
+  const handleStartTrip = async () => {
+    try {
+      await startTrip();
+    } catch {
+      // handled in store + alert
+    }
   };
+
+  const availableCount = assignedTrips.length;
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -38,7 +60,6 @@ export default function PanelScreen() {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* Header */}
         <View style={styles.header}>
           <View style={styles.headerLeft}>
             <View style={styles.avatarContainer}>
@@ -52,7 +73,6 @@ export default function PanelScreen() {
           </View>
         </View>
 
-        {/* Greeting */}
         <View style={styles.greetingSection}>
           <Text style={styles.greeting}>¡Buen día,</Text>
           <Text style={styles.greetingSub}>
@@ -60,7 +80,6 @@ export default function PanelScreen() {
           </Text>
         </View>
 
-        {/* Vehicle Selection */}
         <View style={styles.card}>
           <View style={styles.cardHeader}>
             <View style={styles.cardTitleRow}>
@@ -68,48 +87,63 @@ export default function PanelScreen() {
               <Text style={styles.cardTitle}>Vehículo Asignado</Text>
             </View>
             <Text style={styles.availableBadge}>
-              {vehicles.length} DISPONIBLES
+              {availableCount} DISPONIBLES
             </Text>
           </View>
 
-          {vehicles.map((vehicle) => {
-            const isSelected = selectedVehicle?.id === vehicle.id;
-            return (
-              <TouchableOpacity
-                key={vehicle.id}
-                style={[
-                  styles.vehicleItem,
-                  isSelected && styles.vehicleItemSelected,
-                ]}
-                onPress={() => selectVehicle(vehicle)}
-                activeOpacity={0.8}
-              >
-                <View style={styles.vehicleIconContainer}>
-                  <Ionicons
-                    name="bus"
-                    size={24}
-                    color={isSelected ? "#FFFFFF" : "#94A3B8"}
-                  />
-                </View>
-                <View style={styles.vehicleInfo}>
-                  <Text
-                    style={[
-                      styles.vehicleLabel,
-                      isSelected && styles.vehicleLabelSelected,
-                    ]}
-                  >
-                    INTERNO
-                  </Text>
-                  <Text
-                    style={[
-                      styles.vehicleName,
-                      isSelected && styles.vehicleNameSelected,
-                    ]}
-                  >
-                    {vehicle.interno}
-                  </Text>
-                </View>
-                {vehicle.placa ? (
+          {isLoading ? (
+            <View style={styles.loadingBox}>
+              <ActivityIndicator size="small" color="#1F3CCF" />
+              <Text style={styles.loadingText}>Cargando unidades...</Text>
+            </View>
+          ) : assignedTrips.length === 0 ? (
+            <View style={styles.emptyBox}>
+              <Text style={styles.emptyText}>
+                No tienes viajes programados asignados.
+              </Text>
+            </View>
+          ) : (
+            assignedTrips.map((trip) => {
+              const isSelected =
+                selectedTrip?.scheduled_trip_id === trip.scheduled_trip_id;
+
+              return (
+                <TouchableOpacity
+                  key={trip.scheduled_trip_id}
+                  style={[
+                    styles.vehicleItem,
+                    isSelected && styles.vehicleItemSelected,
+                  ]}
+                  onPress={() => selectTrip(trip)}
+                  activeOpacity={0.8}
+                >
+                  <View style={styles.vehicleIconContainer}>
+                    <Ionicons
+                      name="bus"
+                      size={24}
+                      color={isSelected ? "#FFFFFF" : "#94A3B8"}
+                    />
+                  </View>
+
+                  <View style={styles.vehicleInfo}>
+                    <Text
+                      style={[
+                        styles.vehicleLabel,
+                        isSelected && styles.vehicleLabelSelected,
+                      ]}
+                    >
+                      INTERNO
+                    </Text>
+                    <Text
+                      style={[
+                        styles.vehicleName,
+                        isSelected && styles.vehicleNameSelected,
+                      ]}
+                    >
+                      {trip.vehicle_internal_code}
+                    </Text>
+                  </View>
+
                   <View style={styles.vehiclePlacaContainer}>
                     <Text
                       style={[
@@ -125,76 +159,84 @@ export default function PanelScreen() {
                         isSelected && styles.vehiclePlacaSelected,
                       ]}
                     >
-                      {vehicle.placa}
+                      {trip.vehicle_plate_number}
                     </Text>
                   </View>
-                ) : (
-                  <View
-                    style={[
-                      styles.radioOuter,
-                      isSelected && styles.radioOuterSelected,
-                    ]}
-                  >
-                    {isSelected && <View style={styles.radioInner} />}
-                  </View>
-                )}
-              </TouchableOpacity>
-            );
-          })}
+                </TouchableOpacity>
+              );
+            })
+          )}
         </View>
 
-        {/* Programmed Route */}
         <View style={styles.card}>
           <View style={styles.cardTitleRow}>
             <Ionicons name="git-compare-outline" size={22} color="#F5A400" />
             <Text style={styles.cardTitle}>Ruta Programada</Text>
           </View>
 
-          <View style={styles.routeTimeline}>
-            <View style={styles.routePoint}>
-              <View style={styles.routeDotOrigin} />
-              <View style={styles.routeTextContainer}>
-                <Text style={styles.routeLabel}>ORIGEN</Text>
-                <Text style={styles.routeCity}>{routeOrigin}</Text>
+          {selectedTrip ? (
+            <>
+              <View style={styles.routeTimeline}>
+                <View style={styles.routePoint}>
+                  <View style={styles.routeDotOrigin} />
+                  <View style={styles.routeTextContainer}>
+                    <Text style={styles.routeLabel}>ORIGEN</Text>
+                    <Text style={styles.routeCity}>{selectedTrip.origin_city}</Text>
+                  </View>
+                </View>
+
+                <View style={styles.routeLine} />
+
+                <View style={styles.routePoint}>
+                  <View style={styles.routeDotDestination} />
+                  <View style={styles.routeTextContainer}>
+                    <Text style={styles.routeLabel}>DESTINO</Text>
+                    <Text style={styles.routeCity}>
+                      {selectedTrip.destination_city}
+                    </Text>
+                  </View>
+                </View>
               </View>
-            </View>
 
-            <View style={styles.routeLine} />
-
-            <View style={styles.routePoint}>
-              <View style={styles.routeDotDestination} />
-              <View style={styles.routeTextContainer}>
-                <Text style={styles.routeLabel}>DESTINO</Text>
-                <Text style={styles.routeCity}>{routeDestination}</Text>
+              <View style={styles.departureCard}>
+                <Ionicons name="time-outline" size={20} color="#B8860B" />
+                <View style={styles.departureInfo}>
+                  <Text style={styles.departureLabel}>Próxima Salida</Text>
+                  <Text style={styles.departureTime}>
+                    {selectedTrip.departure_time}
+                  </Text>
+                </View>
               </View>
+            </>
+          ) : (
+            <View style={styles.emptyBox}>
+              <Text style={styles.emptyText}>Selecciona un viaje para ver la ruta.</Text>
             </View>
-          </View>
-
-          <View style={styles.departureCard}>
-            <Ionicons name="time-outline" size={20} color="#B8860B" />
-            <View style={styles.departureInfo}>
-              <Text style={styles.departureLabel}>Próxima Salida</Text>
-              <Text style={styles.departureTime}>
-                {nextDeparture} (En 12 min)
-              </Text>
-            </View>
-          </View>
+          )}
         </View>
 
-        {/* Start Trip */}
         <View style={styles.card}>
           <TouchableOpacity
-            style={styles.startButton}
+            style={[
+              styles.startButton,
+              (!selectedTrip || isStartingTrip) && styles.startButtonDisabled,
+            ]}
             onPress={handleStartTrip}
             activeOpacity={0.9}
+            disabled={!selectedTrip || isStartingTrip}
           >
-            <Ionicons name="play-circle" size={28} color="#FFFFFF" />
-            <Text style={styles.startButtonText}>EMPEZAR VIAJE</Text>
+            {isStartingTrip ? (
+              <ActivityIndicator color="#FFFFFF" />
+            ) : (
+              <>
+                <Ionicons name="play-circle" size={28} color="#FFFFFF" />
+                <Text style={styles.startButtonText}>EMPEZAR VIAJE</Text>
+              </>
+            )}
           </TouchableOpacity>
 
           <Text style={styles.gpsNote}>
-            Al iniciar, tu posición GPS será compartida con la central y
-            usuarios de Tikzy.
+            Al iniciar, tu posición GPS será compartida con la central y usuarios de Tikzy.
           </Text>
         </View>
       </ScrollView>
@@ -269,13 +311,14 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   greeting: {
-    fontSize: 32,
-    fontWeight: "800",
+    fontSize: 42,
+    fontWeight: "900",
     color: "#1F3CCF",
+    lineHeight: 46,
   },
   greetingSub: {
-    fontSize: 16,
-    color: "#6B7280",
+    fontSize: 20,
+    color: "#4B5563",
     marginTop: 4,
   },
   card: {
@@ -293,60 +336,80 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    marginBottom: 16,
+    marginBottom: 14,
   },
   cardTitleRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
-    marginBottom: 16,
   },
   cardTitle: {
-    fontSize: 17,
-    fontWeight: "700",
+    fontSize: 18,
+    fontWeight: "800",
     color: "#111827",
   },
   availableBadge: {
-    fontSize: 12,
-    fontWeight: "700",
+    fontSize: 13,
+    fontWeight: "900",
     color: "#1F3CCF",
-    letterSpacing: 0.5,
+  },
+  loadingBox: {
+    paddingVertical: 20,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  loadingText: {
+    marginTop: 10,
+    fontSize: 14,
+    color: "#6B7280",
+  },
+  emptyBox: {
+    paddingVertical: 20,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  emptyText: {
+    fontSize: 15,
+    color: "#6B7280",
+    textAlign: "center",
   },
   vehicleItem: {
     flexDirection: "row",
     alignItems: "center",
-    borderRadius: 16,
-    padding: 16,
-    backgroundColor: "#F1F5F9",
-    marginBottom: 10,
+    backgroundColor: "#F8FAFC",
+    borderRadius: 18,
+    padding: 14,
+    marginTop: 12,
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
   },
   vehicleItemSelected: {
     backgroundColor: "#1F3CCF",
+    borderColor: "#1F3CCF",
   },
   vehicleIconContainer: {
-    width: 48,
-    height: 48,
-    borderRadius: 12,
-    backgroundColor: "rgba(148, 163, 184, 0.15)",
+    width: 56,
+    height: 56,
+    borderRadius: 16,
+    backgroundColor: "rgba(255,255,255,0.14)",
     alignItems: "center",
     justifyContent: "center",
-    marginRight: 14,
+    marginRight: 12,
   },
   vehicleInfo: {
     flex: 1,
   },
   vehicleLabel: {
     fontSize: 11,
-    fontWeight: "600",
-    color: "#94A3B8",
-    letterSpacing: 0.5,
+    fontWeight: "800",
+    color: "#6B7280",
   },
   vehicleLabelSelected: {
-    color: "rgba(255,255,255,0.7)",
+    color: "#DBEAFE",
   },
   vehicleName: {
-    fontSize: 18,
-    fontWeight: "800",
+    fontSize: 26,
+    fontWeight: "900",
     color: "#111827",
     marginTop: 2,
   },
@@ -358,47 +421,28 @@ const styles = StyleSheet.create({
   },
   vehiclePlacaLabel: {
     fontSize: 11,
-    fontWeight: "600",
-    color: "#94A3B8",
-    letterSpacing: 0.5,
+    fontWeight: "800",
+    color: "#6B7280",
   },
   vehiclePlacaLabelSelected: {
-    color: "rgba(255,255,255,0.7)",
+    color: "#DBEAFE",
   },
   vehiclePlaca: {
-    fontSize: 16,
-    fontWeight: "700",
+    fontSize: 22,
+    fontWeight: "900",
     color: "#111827",
     marginTop: 2,
   },
   vehiclePlacaSelected: {
     color: "#FFFFFF",
   },
-  radioOuter: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    borderWidth: 2,
-    borderColor: "#D1D5DB",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  radioOuterSelected: {
-    borderColor: "#FFFFFF",
-  },
-  radioInner: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    backgroundColor: "#FFFFFF",
-  },
   routeTimeline: {
-    paddingLeft: 8,
+    marginTop: 18,
+    marginBottom: 18,
   },
   routePoint: {
     flexDirection: "row",
-    alignItems: "center",
-    gap: 14,
+    alignItems: "flex-start",
   },
   routeDotOrigin: {
     width: 14,
@@ -406,7 +450,7 @@ const styles = StyleSheet.create({
     borderRadius: 7,
     borderWidth: 3,
     borderColor: "#1F3CCF",
-    backgroundColor: "#FFFFFF",
+    marginTop: 4,
   },
   routeDotDestination: {
     width: 14,
@@ -414,78 +458,73 @@ const styles = StyleSheet.create({
     borderRadius: 7,
     borderWidth: 3,
     borderColor: "#F5A400",
-    backgroundColor: "#FFFFFF",
+    marginTop: 4,
   },
   routeLine: {
     width: 2,
-    height: 30,
-    backgroundColor: "#D1D5DB",
+    height: 38,
+    backgroundColor: "#CBD5E1",
     marginLeft: 6,
-    borderStyle: "dashed" as any,
+    marginVertical: 6,
   },
   routeTextContainer: {
-    flex: 1,
+    marginLeft: 14,
   },
   routeLabel: {
     fontSize: 11,
-    fontWeight: "600",
-    color: "#94A3B8",
-    letterSpacing: 0.5,
+    fontWeight: "800",
+    color: "#6B7280",
   },
   routeCity: {
-    fontSize: 17,
-    fontWeight: "700",
+    fontSize: 20,
+    fontWeight: "900",
     color: "#111827",
-    marginTop: 2,
+    marginTop: 4,
   },
   departureCard: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#FEF9E7",
-    borderRadius: 14,
-    padding: 16,
-    marginTop: 18,
-    gap: 12,
+    backgroundColor: "#FEF3C7",
+    borderRadius: 16,
+    paddingHorizontal: 14,
+    paddingVertical: 14,
   },
   departureInfo: {
-    flex: 1,
+    marginLeft: 10,
   },
   departureLabel: {
     fontSize: 13,
-    fontWeight: "600",
-    color: "#B8860B",
+    fontWeight: "700",
+    color: "#92400E",
   },
   departureTime: {
-    fontSize: 16,
-    fontWeight: "800",
-    color: "#111827",
+    fontSize: 18,
+    fontWeight: "900",
+    color: "#78350F",
     marginTop: 2,
   },
   startButton: {
-    flexDirection: "row",
     backgroundColor: "#1F3CCF",
     borderRadius: 20,
-    height: 64,
+    minHeight: 68,
+    flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     gap: 12,
-    shadowColor: "#1F3CCF",
-    shadowOpacity: 0.3,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 6,
+  },
+  startButtonDisabled: {
+    opacity: 0.6,
   },
   startButtonText: {
     color: "#FFFFFF",
-    fontSize: 20,
-    fontWeight: "800",
-    letterSpacing: 1,
+    fontSize: 22,
+    fontWeight: "900",
   },
   gpsNote: {
     textAlign: "center",
-    fontSize: 13,
-    color: "#94A3B8",
-    marginTop: 14,
-    lineHeight: 18,
+    marginTop: 16,
+    color: "#6B7280",
+    fontSize: 14,
+    lineHeight: 20,
   },
 });
