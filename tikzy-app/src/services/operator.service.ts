@@ -258,3 +258,11 @@ export async function createManualSale(
     token
   );
 }
+
+export async function getCurrentManualSales(token: string) {
+  return apiFetch<ManualSaleResponse[]>(
+    "/manual-sales/current",
+    { method: "GET" },
+    token
+  );
+}

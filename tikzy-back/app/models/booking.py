@@ -25,6 +25,10 @@ class Booking(Base):
 
     status = Column(String(30), nullable=False, default="pending_payment")
 
+    sales_channel = Column(String(30), nullable=False, default="app")
+    payment_method = Column(String(30), nullable=True)
+    notes = Column(String(255), nullable=True)
+
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(
         DateTime(timezone=True),

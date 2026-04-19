@@ -51,6 +51,14 @@ export default function LoginScreen() {
     }
   }
 
+  function handleGooglePress() {
+    router.push("/register");
+  }
+
+  function handleApplePress() {
+    router.push("/register");
+  }
+
   return (
     <Screen>
       <View style={styles.outer}>
@@ -101,13 +109,18 @@ export default function LoginScreen() {
             </View>
 
             <View style={styles.socialRow}>
-              <TouchableOpacity style={styles.socialButton} activeOpacity={0.85}>
+              <TouchableOpacity
+                style={styles.socialButton}
+                activeOpacity={0.85}
+                onPress={handleGooglePress}
+              >
                 <Text style={styles.socialText}>Google</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
                 style={[styles.socialButton, styles.appleButton]}
                 activeOpacity={0.85}
+                onPress={handleApplePress}
               >
                 <Text style={styles.appleText}>Apple</Text>
               </TouchableOpacity>

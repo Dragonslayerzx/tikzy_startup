@@ -32,4 +32,6 @@ class ManualSaleResponse(BaseModel):
 
     status: str
     payment_method: str
+    sales_channel: str
+    notes: Optional[str] = None
     created_at: datetime

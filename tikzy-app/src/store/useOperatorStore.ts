@@ -12,6 +12,7 @@ import {
   confirmTicketBoarding,
   createManualSale,
   endCurrentTripSession,
+  getCurrentManualSales,
   getCurrentPassengerManifest,
   getCurrentSeatMap,
   getCurrentTripSession,
@@ -30,6 +31,7 @@ type OperatorStoreState = {
   isLoadingManifest: boolean;
   isLoadingSeatMap: boolean;
   isCreatingManualSale: boolean;
+  isLoadingManualSales: boolean;
   error: string | null;
 
   operatorId: number | null;
@@ -55,6 +57,7 @@ type OperatorStoreState = {
   loadCurrentTrip: () => Promise<void>;
   loadPassengerManifest: () => Promise<void>;
   loadSeatMap: () => Promise<void>;
+  loadManualSales: () => Promise<void>;
 
   selectTrip: (trip: OperatorAssignedTripItem) => void;
   startTrip: () => Promise<void>;
@@ -67,27 +70,8 @@ type OperatorStoreState = {
 
   createSale: (payload: ManualSalePayload) => Promise<void>;
 
-  totalRevenue: number;
-  scannedTickets: number;
-  manualSales: number;
-  totalKm: number;
-  totalHours: number;
-  appRevenue: number;
-  cashRevenue: number;
-  cancellations: number;
-  routeOrigin: string;
-  routeDestination: string;
-
   clearError: () => void;
   resetOperator: () => void;
-};
-
-const hoursBetween = (startedAt?: string | null) => {
-  if (!startedAt) return 0;
-  const start = new Date(startedAt).getTime();
-  if (Number.isNaN(start)) return 0;
-  const diffMs = Date.now() - start;
-  return Math.max(0, diffMs / (1000 * 60 * 60));
 };
 
 export const useOperatorStore = create<OperatorStoreState>((set, get) => ({
@@ -99,6 +83,7 @@ export const useOperatorStore = create<OperatorStoreState>((set, get) => ({
   isLoadingManifest: false,
   isLoadingSeatMap: false,
   isCreatingManualSale: false,
+  isLoadingManualSales: false,
   error: null,
 
   operatorId: null,
@@ -158,6 +143,10 @@ export const useOperatorStore = create<OperatorStoreState>((set, get) => ({
       set({
         currentTrip: null,
         isTripActive: false,
+        manifest: null,
+        passengers: [],
+        seatMap: null,
+        manualSalesHistory: [],
         error: "No authenticated operator session",
       });
       return;
@@ -171,6 +160,8 @@ export const useOperatorStore = create<OperatorStoreState>((set, get) => ({
         isTripActive: true,
         error: null,
       });
+
+      await get().loadManualSales();
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "No active trip session";
@@ -185,6 +176,7 @@ export const useOperatorStore = create<OperatorStoreState>((set, get) => ({
           manifest: null,
           passengers: [],
           seatMap: null,
+          manualSalesHistory: [],
         });
         return;
       }
@@ -192,6 +184,7 @@ export const useOperatorStore = create<OperatorStoreState>((set, get) => ({
       set({
         currentTrip: null,
         isTripActive: false,
+        manualSalesHistory: [],
         error: message,
       });
     }
@@ -257,6 +250,48 @@ export const useOperatorStore = create<OperatorStoreState>((set, get) => ({
     }
   },
 
+  loadManualSales: async () => {
+    const token = useAuthStore.getState().token;
+
+    if (!token) {
+      set({ error: "No authenticated operator session" });
+      return;
+    }
+
+    set({ isLoadingManualSales: true, error: null });
+
+    try {
+      const sales = await getCurrentManualSales(token);
+
+      set({
+        manualSalesHistory: sales,
+        isLoadingManualSales: false,
+      });
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : "No se pudieron cargar las ventas manuales";
+
+      if (
+        message.includes("No active trip session found") ||
+        message.includes("404")
+      ) {
+        set({
+          manualSalesHistory: [],
+          isLoadingManualSales: false,
+        });
+        return;
+      }
+
+      set({
+        manualSalesHistory: [],
+        isLoadingManualSales: false,
+        error: message,
+      });
+    }
+  },
+
   selectTrip: (trip) => set({ selectedTrip: trip }),
 
   startTrip: async () => {
@@ -292,6 +327,8 @@ export const useOperatorStore = create<OperatorStoreState>((set, get) => ({
         isStartingTrip: false,
         error: null,
       });
+
+      await get().loadManualSales();
     } catch (error) {
       set({
         isStartingTrip: false,
@@ -326,6 +363,7 @@ export const useOperatorStore = create<OperatorStoreState>((set, get) => ({
         seatMap: null,
         scannedTicket: null,
         lastManualSale: null,
+        manualSalesHistory: [],
       });
     } catch (error) {
       set({
@@ -471,6 +509,7 @@ export const useOperatorStore = create<OperatorStoreState>((set, get) => ({
       await get().loadCurrentTrip();
       await get().loadPassengerManifest();
       await get().loadSeatMap();
+      await get().loadManualSales();
     } catch (error) {
       set({
         isCreatingManualSale: false,
@@ -481,61 +520,6 @@ export const useOperatorStore = create<OperatorStoreState>((set, get) => ({
       });
       throw error;
     }
-  },
-
-  get totalRevenue() {
-    const manifestRevenue = get().passengers.reduce(
-      (sum, item) => sum + Number(item.total_amount || 0),
-      0
-    );
-    return manifestRevenue;
-  },
-
-  get scannedTickets() {
-    return get().passengers.filter((p) => p.is_boarded).length;
-  },
-
-  get manualSales() {
-    return get().manualSalesHistory.length;
-  },
-
-  get totalKm() {
-    return Math.round(Number(get().currentTrip?.distance_km ?? 0));
-  },
-
-  get totalHours() {
-    const hrs = hoursBetween(get().currentTrip?.started_at);
-    return Number(hrs.toFixed(1));
-  },
-
-  get appRevenue() {
-    const manualIds = new Set(get().manualSalesHistory.map((sale) => sale.booking_id));
-    return get().passengers
-      .filter((p) => !manualIds.has(p.booking_id))
-      .reduce((sum, item) => sum + Number(item.total_amount || 0), 0);
-  },
-
-  get cashRevenue() {
-    return get().manualSalesHistory.reduce(
-      (sum, sale) => sum + Number(sale.total_amount || 0),
-      0
-    );
-  },
-
-  get cancellations() {
-    return get().passengers.filter((p) => p.status === "cancelled").length;
-  },
-
-  get routeOrigin() {
-    return get().currentTrip?.origin_city ?? get().manifest?.route_origin ?? "Origen";
-  },
-
-  get routeDestination() {
-    return (
-      get().currentTrip?.destination_city ??
-      get().manifest?.route_destination ??
-      "Destino"
-    );
   },
 
   clearError: () => set({ error: null }),
@@ -550,6 +534,7 @@ export const useOperatorStore = create<OperatorStoreState>((set, get) => ({
       isLoadingManifest: false,
       isLoadingSeatMap: false,
       isCreatingManualSale: false,
+      isLoadingManualSales: false,
       error: null,
       operatorId: null,
       operatorName: "",
@@ -565,3 +550,5 @@ export const useOperatorStore = create<OperatorStoreState>((set, get) => ({
       manualSalesHistory: [],
     }),
 }));
+
+export default useOperatorStore;

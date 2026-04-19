@@ -77,6 +77,61 @@ def get_active_trip_session(db: Session, operator_id: int) -> TripSession:
     return trip_session
 
 
+def build_manual_sale_response(booking: Booking, trip_price: Decimal) -> ManualSaleResponse:
+    seat_numbers = [seat.seat_number for seat in booking.booking_seats]
+    unit_price = quantize_money(trip_price)
+    subtotal, service_fee, total_amount = calculate_amounts(
+        unit_price,
+        booking.passenger_count,
+    )
+
+    return ManualSaleResponse(
+        booking_id=booking.id,
+        ticket_code=f"TK-{booking.id}",
+        scheduled_trip_id=booking.scheduled_trip_id,
+        customer_name=booking.customer_name,
+        customer_phone=booking.customer_phone,
+        customer_email=booking.customer_email,
+        passenger_count=booking.passenger_count,
+        seat_numbers=seat_numbers,
+        unit_price=unit_price,
+        subtotal_amount=subtotal,
+        service_fee=service_fee,
+        total_amount=total_amount,
+        status=booking.status,
+        payment_method=booking.payment_method or "cash",
+        sales_channel=booking.sales_channel,
+        notes=booking.notes,
+        created_at=booking.created_at,
+    )
+
+
+@router.get("/current", response_model=list[ManualSaleResponse])
+def get_current_manual_sales(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    operator = get_current_operator(db, current_user)
+    trip_session = get_active_trip_session(db, operator.id)
+
+    trip = trip_session.scheduled_trip
+
+    bookings = (
+        db.query(Booking)
+        .options(joinedload(Booking.booking_seats))
+        .filter(
+            Booking.scheduled_trip_id == trip.id,
+            Booking.sales_channel == "manual",
+        )
+        .order_by(Booking.created_at.desc())
+        .all()
+    )
+
+    trip_price = Decimal(trip.price)
+
+    return [build_manual_sale_response(booking, trip_price) for booking in bookings]
+
+
 @router.post("/", response_model=ManualSaleResponse, status_code=status.HTTP_201_CREATED)
 def create_manual_sale(
     payload: ManualSaleCreateRequest,
@@ -168,6 +223,9 @@ def create_manual_sale(
         passenger_count=payload.passenger_count,
         total_amount=total_amount,
         status="confirmed",
+        sales_channel="manual",
+        payment_method=payload.payment_method,
+        notes=payload.notes.strip() if payload.notes else None,
     )
 
     db.add(booking)
@@ -197,21 +255,12 @@ def create_manual_sale(
         )
 
     db.refresh(booking)
-
-    return ManualSaleResponse(
-        booking_id=booking.id,
-        ticket_code=f"TK-{booking.id}",
-        scheduled_trip_id=trip.id,
-        customer_name=booking.customer_name,
-        customer_phone=booking.customer_phone,
-        customer_email=booking.customer_email,
-        passenger_count=booking.passenger_count,
-        seat_numbers=normalized_seats,
-        unit_price=unit_price,
-        subtotal_amount=subtotal,
-        service_fee=service_fee,
-        total_amount=total_amount,
-        status=booking.status,
-        payment_method=payload.payment_method,
-        created_at=booking.created_at,
+    db.refresh(trip)
+    booking = (
+        db.query(Booking)
+        .options(joinedload(Booking.booking_seats))
+        .filter(Booking.id == booking.id)
+        .first()
     )
+
+    return build_manual_sale_response(booking, Decimal(trip.price))
